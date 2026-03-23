@@ -204,10 +204,9 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
     if (!user.is_active) {
       return res.status(403).json({
         success: false,
-        message: 'Account yako imefungiwa na Admin. Tafadhali wasiliana na support kwa msaada.',
-        messageEn: 'Your account has been blocked by Admin. Please contact support for assistance.',
+        message: 'Your account has been suspended by Admin. Please contact support for assistance at: support@isafari.co.tz',
         field: 'account',
-        code: 'ACCOUNT_BLOCKED'
+        code: 'ACCOUNT_SUSPENDED'
       });
     }
 
@@ -235,7 +234,7 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
     // Generate token
     const token = generateToken(user);
 
-    // If service provider, get provider profile data
+    // If service provider, get provider profile data INCLUDING BADGE
     let providerData = {};
     if (user.user_type === 'service_provider') {
       const provider = await ServiceProvider.findOne({ user_id: parseInt(user.id) });
@@ -250,6 +249,14 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
           }
         }
         
+        // Get provider badge from provider_badges table
+        const { pool } = require('../models');
+        const badgeResult = await pool.query(
+          'SELECT badge_type, assigned_at, expires_at FROM provider_badges WHERE provider_id = $1',
+          [provider.id]
+        );
+        const badge = badgeResult.rows[0];
+        
         providerData = {
           companyName: provider.business_name || '',
           businessName: provider.business_name || '',
@@ -257,6 +264,7 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
           description: provider.description || '',
           serviceLocation: provider.service_location || provider.location || '',
           serviceCategories: provider.service_categories || [],
+          badgeType: badge?.badge_type || null, // Add badge type to user data
           locationData: locationData && typeof locationData === 'object' ? locationData : {
             region: provider.region || '',
             district: provider.district || '',
@@ -297,38 +305,64 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
   }
 });
 
+// Helper to parse a specific cookie from the cookie header string
+const parseCookieValue = (cookieHeader, name) => {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
 // Google OAuth - Start authentication for LOGIN (existing users only)
 router.get('/google', (req, res, next) => {
-  // Store flow type in state parameter (more reliable than session for cross-origin)
   console.log('🔐 Google OAuth LOGIN flow started');
+  // Set cookie to reliably track flow type across OAuth redirect chain
+  res.cookie('google_auth_flow', 'login', {
+    maxAge: 10 * 60 * 1000, // 10 minutes
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/'
+  });
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
     prompt: 'select_account',
-    state: 'login' // Pass flow type via state parameter
+    state: 'login'
   })(req, res, next);
 });
 
 // Google OAuth - Start authentication for REGISTRATION (new users)
 router.get('/google/register', (req, res, next) => {
   console.log('📝 Google OAuth REGISTRATION flow started');
+  // Set cookie to reliably track flow type across OAuth redirect chain
+  res.cookie('google_auth_flow', 'register', {
+    maxAge: 10 * 60 * 1000, // 10 minutes
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/'
+  });
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
     prompt: 'select_account',
-    state: 'register' // Pass flow type via state parameter
+    state: 'register'
   })(req, res, next);
 });
 
 // Google OAuth callback
 router.get('/google/callback', (req, res, next) => {
-  // Get flow type from state parameter
-  const flowType = req.query.state || 'login';
-  console.log('🔄 Google OAuth callback - flow type:', flowType);
+  // Get flow type from cookie (most reliable) then fallback to state parameter
+  const cookieFlowType = parseCookieValue(req.headers.cookie, 'google_auth_flow');
+  const stateFlowType = req.query.state;
+  const flowType = cookieFlowType || stateFlowType || 'login';
+  console.log('🔄 Google OAuth callback - flow type:', flowType, '(cookie:', cookieFlowType, ', state:', stateFlowType, ')');
   console.log('🌐 FRONTEND_URL:', process.env.FRONTEND_URL);
   
-  // Store flow type for passport strategy to use
+  // Store flow type on request for passport strategy to use
   req.googleFlowType = flowType;
   
-  passport.authenticate('google', { session: false, failureRedirect: '/login?error=google_auth_failed' })(req, res, next);
+  // Clear the flow tracking cookie
+  res.clearCookie('google_auth_flow', { path: '/' });
+  
+  const frontendUrl = process.env.FRONTEND_URL || 'https://isafari-tz.netlify.app';
+  passport.authenticate('google', { session: false, failureRedirect: `${frontendUrl}/login?error=google_auth_failed` })(req, res, next);
 }, async (req, res) => {
     try {
       // CRITICAL: Use production frontend URL
@@ -356,14 +390,16 @@ router.get('/google/callback', (req, res, next) => {
           avatarUrl: req.user.avatarUrl
         };
         
-        // Use Base64 encoding for safer URL transmission
-        const googleDataBase64 = Buffer.from(JSON.stringify(googleDataObj)).toString('base64');
+        // Use URL-safe Base64 encoding for safer URL transmission
+        // CRITICAL: Use base64url to avoid +/= corruption in URL query strings
+        const googleDataBase64 = Buffer.from(JSON.stringify(googleDataObj)).toString('base64url');
         
         console.log('🔄 New Google user in registration flow, redirecting to complete registration');
         console.log('📧 Email:', req.user.email);
+        console.log('🔗 GoogleData base64url length:', googleDataBase64.length);
         
-        // Redirect to role selection with Google data
-        return res.redirect(`${frontendUrl}/google-role-selection?googleData=${googleDataBase64}`);
+        // Redirect to role selection with Google data (encodeURIComponent for extra safety)
+        return res.redirect(`${frontendUrl}/google-role-selection?googleData=${encodeURIComponent(googleDataBase64)}`);
       }
       
       // Existing user - generate token and redirect
@@ -411,6 +447,25 @@ router.get('/me', passport.authenticate('jwt', { session: false }), async (req, 
   }
 });
 
+// Check Google OAuth configuration status
+router.get('/google/status', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  
+  const isConfigured = clientId && 
+                       clientSecret && 
+                       clientId !== 'your-google-client-id-from-console-cloud-google' &&
+                       clientSecret !== 'your-google-client-secret-from-console-cloud-google';
+  
+  res.json({
+    success: true,
+    configured: isConfigured,
+    message: isConfigured 
+      ? 'Google OAuth is configured and ready to use' 
+      : 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env'
+  });
+});
+
 // Complete Google Registration - For new Google users who need to select user type
 router.post('/google/complete-registration', async (req, res) => {
   try {
@@ -421,6 +476,7 @@ router.post('/google/complete-registration', async (req, res) => {
     } = req.body;
 
     console.log('📝 Google registration completion for:', email, 'userType:', userType);
+    console.log('📋 Request body:', JSON.stringify(req.body, null, 2));
 
     // Validate required fields
     if (!googleId || !email || !userType) {
@@ -436,6 +492,49 @@ router.post('/google/complete-registration', async (req, res) => {
         success: false,
         message: 'Invalid account type selected. Must be "traveler" or "service_provider"'
       });
+    }
+    
+    // Validate traveler-specific fields
+    if (userType === 'traveler') {
+      if (!firstName || !firstName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'First name is required for travelers',
+          field: 'firstName'
+        });
+      }
+      if (!lastName || !lastName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Last name is required for travelers',
+          field: 'lastName'
+        });
+      }
+    }
+    
+    // Validate service provider-specific fields
+    if (userType === 'service_provider') {
+      if (!companyName || !companyName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Company name is required for service providers',
+          field: 'companyName'
+        });
+      }
+      if (!locationData || !locationData.region || !locationData.district) {
+        return res.status(400).json({
+          success: false,
+          message: 'Service location (Region and District) is required for service providers',
+          field: 'serviceLocation'
+        });
+      }
+      if (!serviceCategories || serviceCategories.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'At least one service category is required for service providers',
+          field: 'serviceCategories'
+        });
+      }
     }
 
     // Check if user already exists by Google ID
