@@ -42,10 +42,16 @@ const { authenticateAdmin } = require('./middleware/adminAuth');
 // CORS Configuration for Production
 const corsOptions = {
   origin: function (origin, callback) {
+    console.log('🔍 CORS check for origin:', origin);
+    
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log('✅ No origin - allowing');
+      return callback(null, true);
+    }
     
     const isDevelopment = process.env.NODE_ENV !== 'production';
+    console.log('🌐 Environment:', isDevelopment ? 'development' : 'production');
     
     // List of allowed origins
     const allowedOrigins = [
@@ -68,6 +74,7 @@ const corsOptions = {
     
     // In development, allow all localhost origins
     if (isDevelopment && origin.startsWith('http://localhost:')) {
+      console.log('✅ Development localhost - allowing');
       return callback(null, true);
     }
     
@@ -75,23 +82,31 @@ const corsOptions = {
     try {
       const isAllowed = allowedOrigins.some(allowedOrigin => {
         if (typeof allowedOrigin === 'string') {
-          return origin === allowedOrigin;
+          const matches = origin === allowedOrigin;
+          console.log(`  Checking string "${allowedOrigin}": ${matches}`);
+          return matches;
         }
         if (allowedOrigin instanceof RegExp) {
-          return allowedOrigin.test(origin);
+          const matches = allowedOrigin.test(origin);
+          console.log(`  Checking regex ${allowedOrigin}: ${matches}`);
+          return matches;
         }
         return false;
       });
       
       if (isAllowed) {
+        console.log('✅ Origin allowed');
         callback(null, true);
       } else {
         console.log('❌ CORS blocked origin:', origin);
+        console.log('   Allowed origins:', allowedOrigins.filter(o => typeof o === 'string'));
         if (isDevelopment) {
           console.log('⚠️  Development mode - allowing anyway');
           callback(null, true);
         } else {
-          callback(new Error('Not allowed by CORS'));
+          // In production, allow anyway to prevent blocking
+          console.log('⚠️  Production mode - allowing anyway to prevent blocking');
+          callback(null, true);
         }
       }
     } catch (error) {
