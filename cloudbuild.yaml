@@ -1,0 +1,38 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jedanets-hq-bouncesteps-backend/bouncesteps-backend-git:latest', '.']
+  
+  # Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jedanets-hq-bouncesteps-backend/bouncesteps-backend-git:latest']
+  
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'bouncesteps-backend-git'
+      - '--image'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jedanets-hq-bouncesteps-backend/bouncesteps-backend-git:latest'
+      - '--region'
+      - 'europe-west1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--update-env-vars'
+      - 'NODE_ENV=production,FRONTEND_URL=https://bouncesteps.com,DATABASE_URL=postgresql://postgres:%40JedaNets01@34.42.58.123:5432/bouncesteps-db,JWT_SECRET=isafari_jwt_secret_key_2024_secure_random_string,JWT_EXPIRES_IN=7d,SESSION_SECRET=isafari-oauth-session-secret'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '10'
+      - '--memory'
+      - '512Mi'
+      - '--cpu'
+      - '1'
+      - '--timeout'
+      - '300'
+
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/jedanets-hq-bouncesteps-backend/bouncesteps-backend-git:latest'
