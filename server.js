@@ -72,26 +72,32 @@ const corsOptions = {
     }
     
     // Check if origin is allowed
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        return origin === allowedOrigin;
-      }
-      if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
-      }
-      return false;
-    });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('❌ CORS blocked origin:', origin);
-      if (isDevelopment) {
-        console.log('⚠️  Development mode - allowing anyway');
+    try {
+      const isAllowed = allowedOrigins.some(allowedOrigin => {
+        if (typeof allowedOrigin === 'string') {
+          return origin === allowedOrigin;
+        }
+        if (allowedOrigin instanceof RegExp) {
+          return allowedOrigin.test(origin);
+        }
+        return false;
+      });
+      
+      if (isAllowed) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        console.log('❌ CORS blocked origin:', origin);
+        if (isDevelopment) {
+          console.log('⚠️  Development mode - allowing anyway');
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
       }
+    } catch (error) {
+      console.error('❌ CORS error:', error);
+      // Allow the request anyway to prevent 500 errors
+      callback(null, true);
     }
   },
   credentials: true,
