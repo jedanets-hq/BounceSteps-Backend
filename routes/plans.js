@@ -35,35 +35,6 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
   }
 });
 
-// Get plans for a user (by userId param)
-router.get('/user/:userId', async (req, res) => {
-  try {
-    // Check if plans table exists
-    const tableCheck = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'plans'
-      );
-    `);
-    
-    if (tableCheck.rows[0].exists) {
-      const result = await pool.query(`
-        SELECT * FROM plans
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-      `, [req.params.userId]);
-      
-      res.json({ success: true, data: result.rows });
-    } else {
-      res.json({ success: true, data: [] });
-    }
-  } catch (error) {
-    console.error('Get plans error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get plans' });
-  }
-});
-
 // Create new plan
 router.post('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {

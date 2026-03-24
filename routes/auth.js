@@ -361,7 +361,7 @@ router.get('/google/callback', (req, res, next) => {
   // Clear the flow tracking cookie
   res.clearCookie('google_auth_flow', { path: '/' });
   
-  const frontendUrl = process.env.FRONTEND_URL || 'https://isafari-tz.netlify.app';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://bouncesteps.com';
   passport.authenticate('google', { session: false, failureRedirect: `${frontendUrl}/login?error=google_auth_failed` })(req, res, next);
 }, async (req, res) => {
     try {

@@ -4,7 +4,10 @@ const { Pool } = require('pg');
 const poolConfig = process.env.DATABASE_URL 
   ? {
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      // Only use SSL in production (when NODE_ENV is production)
+      ssl: process.env.NODE_ENV === 'production' 
+        ? { rejectUnauthorized: false } 
+        : false
     }
   : {
       user: process.env.DB_USER || 'postgres',

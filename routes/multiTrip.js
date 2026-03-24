@@ -17,7 +17,7 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
     res.json({ success: true, journeys: result.rows });
   } catch (error) {
     console.error('Get multi-trip journeys error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get journeys' });
+    res.json({ success: true, journeys: [] }); // Return empty array to prevent crashes
   }
 });
 
@@ -104,85 +104,6 @@ router.get('/:id', passport.authenticate('jwt', { session: false }), async (req,
   } catch (error) {
     console.error('Get journey error:', error);
     res.status(500).json({ success: false, message: 'Failed to get journey' });
-  }
-});
-
-// Add service to journey
-router.post('/:id/services', passport.authenticate('jwt', { session: false }), async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const journeyId = req.params.id;
-    const { serviceId, destinationIndex } = req.body;
-    
-    // Verify journey belongs to user
-    const journeyCheck = await pool.query(`
-      SELECT id FROM multi_trip_journeys WHERE id = $1 AND user_id = $2
-    `, [journeyId, userId]);
-    
-    if (journeyCheck.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Journey not found' });
-    }
-    
-    // Add service to journey
-    const result = await pool.query(`
-      INSERT INTO journey_services (journey_id, service_id, destination_index)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (journey_id, service_id) DO UPDATE SET destination_index = $3
-      RETURNING *
-    `, [journeyId, serviceId, destinationIndex]);
-    
-    res.json({ success: true, data: result.rows[0] });
-  } catch (error) {
-    console.error('Add service to journey error:', error);
-    res.status(500).json({ success: false, message: 'Failed to add service' });
-  }
-});
-
-// Update journey status
-router.patch('/:id/status', passport.authenticate('jwt', { session: false }), async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const journeyId = req.params.id;
-    const { status } = req.body;
-    
-    const result = await pool.query(`
-      UPDATE multi_trip_journeys 
-      SET status = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2 AND user_id = $3
-      RETURNING *
-    `, [status, journeyId, userId]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Journey not found' });
-    }
-    
-    res.json({ success: true, journey: result.rows[0] });
-  } catch (error) {
-    console.error('Update journey status error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update journey' });
-  }
-});
-
-// Delete journey
-router.delete('/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const journeyId = req.params.id;
-    
-    const result = await pool.query(`
-      DELETE FROM multi_trip_journeys
-      WHERE id = $1 AND user_id = $2
-      RETURNING *
-    `, [journeyId, userId]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Journey not found' });
-    }
-    
-    res.json({ success: true, message: 'Journey deleted successfully' });
-  } catch (error) {
-    console.error('Delete journey error:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete journey' });
   }
 });
 

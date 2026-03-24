@@ -2,6 +2,7 @@
  * Initialize database tables for iSafari application
  */
 
+require('dotenv').config();
 const { pool } = require('../config/postgresql');
 
 async function initializeTables() {

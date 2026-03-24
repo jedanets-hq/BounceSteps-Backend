@@ -67,6 +67,17 @@ const authenticateJWT = (req, res, next) => {
 
     // Authentication successful - attach user to request
     req.user = user;
+    
+    // Check if user account is active (not suspended)
+    if (user.is_active === false) {
+      console.warn(`⚠️ [JWT Auth] Suspended user ${user.id} attempted to access ${req.path}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been suspended by Admin. Please contact support for assistance at: support@isafari.co.tz',
+        code: 'ACCOUNT_SUSPENDED'
+      });
+    }
+    
     console.log(`✅ [JWT Auth] User ${user.id} authenticated for ${req.path}`);
     next();
   })(req, res, next);

@@ -10,22 +10,44 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
     
     const result = await pool.query(`
       SELECT f.*, 
-             s.title, 
-             s.description, 
-             s.price, 
-             s.category,
-             s.images,
-             s.region,
-             s.district,
-             s.area,
-             s.location,
-             s.average_rating,
-             s.review_count,
-             sp.business_name as provider_name,
-             sp.user_id as provider_id
+             -- Provider data (if favorited provider)
+             sp.id as provider_id,
+             sp.business_name,
+             sp.business_type,
+             sp.description as provider_description,
+             sp.location as provider_location,
+             sp.region as provider_region,
+             sp.district as provider_district,
+             sp.area as provider_area,
+             sp.rating,
+             sp.service_categories,
+             u.first_name as provider_first_name,
+             u.last_name as provider_last_name,
+             u.email as provider_email,
+             -- Service data (if favorited service)
+             s.id as service_id,
+             s.title as service_title,
+             s.description as service_description,
+             s.category as service_category,
+             s.price as service_price,
+             s.currency as service_currency,
+             s.duration as service_duration,
+             s.location as service_location,
+             s.region as service_region,
+             s.district as service_district,
+             s.area as service_area,
+             s.images as service_images,
+             s.amenities as service_amenities,
+             s.average_rating as service_rating,
+             s.is_active as service_is_active,
+             -- Service provider info for services
+             sp2.id as service_provider_id,
+             sp2.business_name as service_provider_name
       FROM favorites f
+      LEFT JOIN service_providers sp ON f.provider_id = sp.id
+      LEFT JOIN users u ON sp.user_id = u.id
       LEFT JOIN services s ON f.service_id = s.id
-      LEFT JOIN service_providers sp ON s.provider_id = sp.user_id
+      LEFT JOIN service_providers sp2 ON s.provider_id = sp2.id
       WHERE f.user_id = $1
       ORDER BY f.created_at DESC
     `, [userId]);
@@ -37,40 +59,37 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
   }
 });
 
-// Add service to favorites
-router.post('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
+// Add provider or service to favorites
+router.post('/add', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     const userId = req.user.id;
-    // Accept both serviceId and providerId for backwards compatibility
-    const { serviceId, providerId } = req.body;
-    const targetId = serviceId || providerId;
+    const { providerId, serviceId } = req.body;
     
-    if (!targetId) {
-      return res.status(400).json({ success: false, message: 'Service ID or Provider ID is required' });
-    }
-    
-    // Check if it's a service ID or provider ID
-    let finalServiceId = targetId;
-    
-    // If it looks like a provider ID, find their services
-    const serviceCheck = await pool.query('SELECT id FROM services WHERE id = $1', [targetId]);
-    if (serviceCheck.rows.length === 0) {
-      // Try as provider ID - get their first service
-      const providerServiceCheck = await pool.query('SELECT id FROM services WHERE provider_id = $1 LIMIT 1', [targetId]);
-      if (providerServiceCheck.rows.length > 0) {
-        finalServiceId = providerServiceCheck.rows[0].id;
-      } else {
-        return res.status(404).json({ success: false, message: 'Service or Provider not found' });
-      }
+    // Validate that either providerId or serviceId is provided (not both, not neither)
+    if ((!providerId && !serviceId) || (providerId && serviceId)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Either providerId or serviceId must be provided (not both)' 
+      });
     }
     
     // Add to favorites (or ignore if already exists)
-    const result = await pool.query(`
-      INSERT INTO favorites (user_id, service_id)
-      VALUES ($1, $2)
-      ON CONFLICT (user_id, service_id) DO NOTHING
-      RETURNING *
-    `, [userId, finalServiceId]);
+    let result;
+    if (providerId) {
+      result = await pool.query(`
+        INSERT INTO favorites (user_id, provider_id)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+        RETURNING *
+      `, [userId, providerId]);
+    } else {
+      result = await pool.query(`
+        INSERT INTO favorites (user_id, service_id)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+        RETURNING *
+      `, [userId, serviceId]);
+    }
     
     if (result.rows.length > 0) {
       res.json({ success: true, message: 'Added to favorites', favorite: result.rows[0] });
@@ -83,28 +102,27 @@ router.post('/', passport.authenticate('jwt', { session: false }), async (req, r
   }
 });
 
-// Remove from favorites
-router.delete('/:serviceId', passport.authenticate('jwt', { session: false }), async (req, res) => {
+// Remove from favorites (provider or service)
+router.delete('/:type/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     const userId = req.user.id;
-    const targetId = req.params.serviceId;
+    const { type, id } = req.params;
     
-    // Try to delete by service ID first
-    let result = await pool.query(`
-      DELETE FROM favorites
-      WHERE user_id = $1 AND service_id = $2
-      RETURNING *
-    `, [userId, targetId]);
-    
-    // If not found, try as provider ID - delete all services from that provider
-    if (result.rows.length === 0) {
+    let result;
+    if (type === 'provider') {
       result = await pool.query(`
         DELETE FROM favorites
-        WHERE user_id = $1 AND service_id IN (
-          SELECT id FROM services WHERE provider_id = $2
-        )
+        WHERE user_id = $1 AND provider_id = $2
         RETURNING *
-      `, [userId, targetId]);
+      `, [userId, id]);
+    } else if (type === 'service') {
+      result = await pool.query(`
+        DELETE FROM favorites
+        WHERE user_id = $1 AND service_id = $2
+        RETURNING *
+      `, [userId, id]);
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid type. Use "provider" or "service"' });
     }
     
     if (result.rows.length === 0) {
@@ -118,27 +136,67 @@ router.delete('/:serviceId', passport.authenticate('jwt', { session: false }), a
   }
 });
 
-// Check if service is favorited
-router.get('/check/:serviceId', passport.authenticate('jwt', { session: false }), async (req, res) => {
+// Legacy endpoint for backward compatibility
+router.delete('/:providerId', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     const userId = req.user.id;
-    const targetId = req.params.serviceId;
+    const providerId = req.params.providerId;
     
-    // Check by service ID first
-    let result = await pool.query(`
-      SELECT id FROM favorites
-      WHERE user_id = $1 AND service_id = $2
-    `, [userId, targetId]);
+    const result = await pool.query(`
+      DELETE FROM favorites
+      WHERE user_id = $1 AND provider_id = $2
+      RETURNING *
+    `, [userId, providerId]);
     
-    // If not found, check by provider ID
     if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Favorite not found' });
+    }
+    
+    res.json({ success: true, message: 'Removed from favorites' });
+  } catch (error) {
+    console.error('Remove from favorites error:', error);
+    res.status(500).json({ success: false, message: 'Failed to remove from favorites' });
+  }
+});
+
+// Check if provider or service is favorited
+router.get('/check/:type/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { type, id } = req.params;
+    
+    let result;
+    if (type === 'provider') {
       result = await pool.query(`
         SELECT id FROM favorites
-        WHERE user_id = $1 AND service_id IN (
-          SELECT id FROM services WHERE provider_id = $2
-        )
-      `, [userId, targetId]);
+        WHERE user_id = $1 AND provider_id = $2
+      `, [userId, id]);
+    } else if (type === 'service') {
+      result = await pool.query(`
+        SELECT id FROM favorites
+        WHERE user_id = $1 AND service_id = $2
+      `, [userId, id]);
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid type. Use "provider" or "service"' });
     }
+    
+    res.json({ success: true, isFavorite: result.rows.length > 0 });
+  } catch (error) {
+    console.error('Check favorite error:', error);
+    res.status(500).json({ success: false, message: 'Failed to check favorite' });
+  }
+});
+
+// Legacy endpoint for backward compatibility
+router.get('/check/:providerId', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const providerId = req.params.providerId;
+    
+    const result = await pool.query(`
+      SELECT id FROM favorites
+      WHERE user_id = $1 AND provider_id = $2
+    `, [userId, providerId]);
     
     res.json({ success: true, isFavorite: result.rows.length > 0 });
   } catch (error) {

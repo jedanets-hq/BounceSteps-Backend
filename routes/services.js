@@ -12,15 +12,17 @@ router.get('/', async (req, res) => {
     const region = req.query.region; // Get region filter
     const district = req.query.district; // Get district filter
     const area = req.query.area; // Get area/ward filter
+    const featured = req.query.featured; // Get featured filter
+    const trending = req.query.trending; // Get trending filter
     
     // Build WHERE clause dynamically
-    let whereConditions = ["s.status = 'active'", "s.is_active = true"];
+    let whereConditions = ["s.status = 'active'", "s.is_active = true", "u.is_active = true"];
     let queryParams = [];
     let paramIndex = 1;
     
     // Add category filter if provided
     if (category && category !== 'all') {
-      whereConditions.push(`s.category = $${paramIndex}`);
+      whereConditions.push(`s.category ILIKE $${paramIndex}`);
       queryParams.push(category);
       paramIndex++;
     }
@@ -32,24 +34,36 @@ router.get('/', async (req, res) => {
       paramIndex++;
     }
     
+    // Add featured filter if provided
+    if (featured === 'true') {
+      whereConditions.push(`s.is_featured = true`);
+    }
+    
+    // Add trending filter if provided
+    if (trending === 'true') {
+      whereConditions.push(`s.is_trending = true`);
+    }
+    
     // Location filtering - flexible to show services in requested area
     if (region) {
-      whereConditions.push(`LOWER(s.region) = LOWER($${paramIndex})`);
+      whereConditions.push(`s.region ILIKE $${paramIndex}`);
       queryParams.push(region);
       paramIndex++;
     }
     
     if (district) {
       // District can match either district OR area field (frontend ward → backend area)
-      whereConditions.push(`(LOWER(s.district) = LOWER($${paramIndex}) OR LOWER(s.area) = LOWER($${paramIndex}))`);
+      // Use ILIKE for case-insensitive matching
+      whereConditions.push(`(s.district ILIKE $${paramIndex} OR s.area ILIKE $${paramIndex})`);
       queryParams.push(district);
       paramIndex++;
     }
     
     if (area) {
-      // Area/ward matching - use LIKE for partial matches (e.g., "BUZURUGA" matches "BUZURUGA KASKAZINI")
-      whereConditions.push(`LOWER(s.area) LIKE LOWER($${paramIndex})`);
-      queryParams.push(`${area}%`); // Add % for partial matching
+      // Area/ward matching - use ILIKE for case-insensitive partial matches
+      // This allows "BUZURUGA" to match "BUZURUGA KASKAZINI", "Buzuruga", etc.
+      whereConditions.push(`s.area ILIKE $${paramIndex}`);
+      queryParams.push(`%${area}%`); // Add % for partial matching on both sides
       paramIndex++;
     }
     
@@ -58,10 +72,11 @@ router.get('/', async (req, res) => {
     
     const whereClause = whereConditions.join(' AND ');
     
-    // Query services table with provider information
-    // REMOVED STRICT CATEGORY FILTERING - Providers can offer ANY service type
+    // Query services table with provider information INCLUDING avatar_url
     const result = await pool.query(`
       SELECT s.*, 
+             sp.id as service_provider_id,
+             sp.user_id as provider_user_id,
              sp.business_name, 
              sp.location as provider_location,
              sp.rating as provider_rating,
@@ -73,22 +88,34 @@ router.get('/', async (req, res) => {
              u.first_name as provider_first_name,
              u.last_name as provider_last_name,
              u.email as provider_email,
-             u.is_verified as user_verified
+             u.avatar_url,
+             u.is_verified as user_verified,
+             pb.badge_type as provider_badge_type
       FROM services s
-      INNER JOIN service_providers sp ON s.provider_id = sp.user_id
-      INNER JOIN users u ON s.provider_id = u.id
+      INNER JOIN service_providers sp ON s.provider_id = sp.id
+      INNER JOIN users u ON sp.user_id = u.id
+      LEFT JOIN provider_badges pb ON sp.id = pb.provider_id
       WHERE ${whereClause}
       ORDER BY s.created_at DESC
       LIMIT $${paramIndex}
     `, queryParams);
     
-    console.log(`📦 Services query: region=${region || 'any'}, district=${district || 'any'}, area=${area || 'any'}, category=${category || 'all'}, search=${search || 'none'}, found=${result.rows.length}`);
+    console.log(`📦 Services query: region=${region || 'any'}, district=${district || 'any'}, area=${area || 'any'}, category=${category || 'all'}, search=${search || 'none'}, featured=${featured || 'any'}, trending=${trending || 'any'}, found=${result.rows.length}`);
     console.log(`✅ FLEXIBLE FILTERING - Providers can offer ANY service category`);
+    
+    // Parse JSON fields that are stored as TEXT
+    const parsedServices = result.rows.map(service => ({
+      ...service,
+      images: service.images ? (typeof service.images === 'string' ? JSON.parse(service.images) : service.images) : [],
+      amenities: service.amenities ? (typeof service.amenities === 'string' ? JSON.parse(service.amenities) : service.amenities) : [],
+      payment_methods: service.payment_methods ? (typeof service.payment_methods === 'string' ? JSON.parse(service.payment_methods) : service.payment_methods) : {},
+      contact_info: service.contact_info ? (typeof service.contact_info === 'string' ? JSON.parse(service.contact_info) : service.contact_info) : {}
+    }));
     
     res.json({ 
       success: true, 
-      services: result.rows,
-      count: result.rows.length
+      services: parsedServices,
+      count: parsedServices.length
     });
   } catch (error) {
     console.error('Get services error:', error);
@@ -96,37 +123,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get service by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT s.*, 
-             sp.business_name, 
-             sp.location as provider_location,
-             sp.rating as provider_rating,
-             sp.is_verified as provider_verified,
-             u.first_name as provider_first_name,
-             u.last_name as provider_last_name,
-             u.email as provider_email,
-             u.is_verified as user_verified
-      FROM services s
-      LEFT JOIN service_providers sp ON s.provider_id = sp.user_id
-      LEFT JOIN users u ON s.provider_id = u.id
-      WHERE s.id = $1
-    `, [req.params.id]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Service not found' });
-    }
-    
-    res.json({ success: true, service: result.rows[0] });
-  } catch (error) {
-    console.error('Get service error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get service' });
-  }
-});
-
-// Get featured/trending services for homepage
+// Get featured/trending services for homepage - MUST BE BEFORE /:id route
 router.get('/featured/slides', async (req, res) => {
   try {
     // Check if services table exists
@@ -139,30 +136,40 @@ router.get('/featured/slides', async (req, res) => {
     `);
     
     if (tableCheck.rows[0].exists) {
-      // Use services table if it exists
+      // Use services table if it exists - get featured services
       const result = await pool.query(`
         SELECT s.*, 
                sp.business_name, 
                sp.location as provider_location,
                u.first_name as provider_first_name,
-               u.last_name as provider_last_name
+               u.last_name as provider_last_name,
+               u.avatar_url
         FROM services s
-        LEFT JOIN service_providers sp ON s.provider_id = sp.user_id
-        LEFT JOIN users u ON s.provider_id = u.id
-        WHERE s.status = 'active' AND s.is_featured = true
+        LEFT JOIN service_providers sp ON s.provider_id = sp.id
+        LEFT JOIN users u ON sp.user_id = u.id
+        WHERE s.status = 'active' AND s.is_featured = true AND s.is_active = true AND u.is_active = true
         ORDER BY s.created_at DESC
         LIMIT 6
       `);
       
+      // Parse JSON fields
+      const parsedServices = result.rows.map(service => ({
+        ...service,
+        images: service.images ? (typeof service.images === 'string' ? JSON.parse(service.images) : service.images) : [],
+        amenities: service.amenities ? (typeof service.amenities === 'string' ? JSON.parse(service.amenities) : service.amenities) : [],
+        payment_methods: service.payment_methods ? (typeof service.payment_methods === 'string' ? JSON.parse(service.payment_methods) : service.payment_methods) : {},
+        contact_info: service.contact_info ? (typeof service.contact_info === 'string' ? JSON.parse(service.contact_info) : service.contact_info) : {}
+      }));
+      
       res.json({
         success: true,
-        services: result.rows,
-        count: result.rows.length
+        services: parsedServices,
+        count: parsedServices.length
       });
     } else {
       // Fallback to service_providers table
       const result = await pool.query(`
-        SELECT sp.*, u.email, u.first_name, u.last_name 
+        SELECT sp.*, u.email, u.first_name, u.last_name, u.avatar_url
         FROM service_providers sp
         JOIN users u ON sp.user_id = u.id
         WHERE u.is_active = true
@@ -186,27 +193,153 @@ router.get('/featured/slides', async (req, res) => {
   }
 });
 
+// Get trending services for homepage - MUST BE BEFORE /:id route
+router.get('/trending', async (req, res) => {
+  try {
+    const limit = req.query.limit || 12;
+    
+    const result = await pool.query(`
+      SELECT s.*, 
+             sp.id as service_provider_id,
+             sp.user_id as provider_user_id,
+             sp.business_name, 
+             sp.location as provider_location,
+             sp.rating as provider_rating,
+             sp.is_verified as provider_verified,
+             sp.region as provider_region,
+             sp.district as provider_district,
+             sp.area as provider_area,
+             sp.service_categories as provider_service_categories,
+             u.first_name as provider_first_name,
+             u.last_name as provider_last_name,
+             u.email as provider_email,
+             u.avatar_url,
+             u.is_verified as user_verified,
+             pb.badge_type as provider_badge_type
+      FROM services s
+      INNER JOIN service_providers sp ON s.provider_id = sp.id
+      INNER JOIN users u ON sp.user_id = u.id
+      LEFT JOIN provider_badges pb ON sp.id = pb.provider_id
+      WHERE s.status = 'active' AND s.is_trending = true AND s.is_active = true AND u.is_active = true
+      ORDER BY s.created_at DESC
+      LIMIT $1
+    `, [limit]);
+    
+    // Parse JSON fields
+    const parsedServices = result.rows.map(service => ({
+      ...service,
+      images: service.images ? (typeof service.images === 'string' ? JSON.parse(service.images) : service.images) : [],
+      amenities: service.amenities ? (typeof service.amenities === 'string' ? JSON.parse(service.amenities) : service.amenities) : [],
+      payment_methods: service.payment_methods ? (typeof service.payment_methods === 'string' ? JSON.parse(service.payment_methods) : service.payment_methods) : {},
+      contact_info: service.contact_info ? (typeof service.contact_info === 'string' ? JSON.parse(service.contact_info) : service.contact_info) : {}
+    }));
+    
+    res.json({
+      success: true,
+      services: parsedServices,
+      count: parsedServices.length
+    });
+  } catch (error) {
+    console.error('Get trending services error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to get trending services',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Get service by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT s.*, 
+             sp.id as service_provider_id,
+             sp.user_id as provider_user_id,
+             sp.business_name, 
+             sp.location as provider_location,
+             sp.rating as provider_rating,
+             sp.is_verified as provider_verified,
+             u.first_name as provider_first_name,
+             u.last_name as provider_last_name,
+             u.email as provider_email,
+             u.avatar_url,
+             u.is_verified as user_verified,
+             pb.badge_type as provider_badge_type
+      FROM services s
+      LEFT JOIN service_providers sp ON s.provider_id = sp.id
+      LEFT JOIN users u ON sp.user_id = u.id
+      LEFT JOIN provider_badges pb ON sp.id = pb.provider_id
+      WHERE s.id = $1 AND s.is_active = true AND u.is_active = true
+    `, [req.params.id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
+    
+    // Parse JSON fields
+    const service = result.rows[0];
+    const parsedService = {
+      ...service,
+      images: service.images ? (typeof service.images === 'string' ? JSON.parse(service.images) : service.images) : [],
+      amenities: service.amenities ? (typeof service.amenities === 'string' ? JSON.parse(service.amenities) : service.amenities) : [],
+      payment_methods: service.payment_methods ? (typeof service.payment_methods === 'string' ? JSON.parse(service.payment_methods) : service.payment_methods) : {},
+      contact_info: service.contact_info ? (typeof service.contact_info === 'string' ? JSON.parse(service.contact_info) : service.contact_info) : {}
+    };
+    
+    res.json({ success: true, service: parsedService });
+  } catch (error) {
+    console.error('Get service error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get service' });
+  }
+});
+
 // Get provider's own services
 router.get('/provider/my-services', authenticateJWT, async (req, res) => {
   try {
     console.log('📋 Fetching services for user:', req.user.id);
     
+    // FIXED: Get service_providers.id first, then query services
+    const providerResult = await pool.query(
+      'SELECT id FROM service_providers WHERE user_id = $1',
+      [req.user.id]
+    );
+    
+    if (providerResult.rows.length === 0) {
+      console.log('⚠️ No provider profile found for user:', req.user.id);
+      return res.json({
+        success: true,
+        services: []
+      });
+    }
+    
+    const providerId = providerResult.rows[0].id;
+    console.log('✅ Provider ID:', providerId);
+    
     const result = await pool.query(`
       SELECT s.*, 
-             COUNT(DISTINCT b.id) as total_bookings,
-             AVG(b.rating) as average_rating
+             COALESCE(COUNT(DISTINCT b.id), 0) as total_bookings
       FROM services s
-      LEFT JOIN bookings b ON s.id = b.service_id
+      LEFT JOIN bookings b ON b.service_id = s.id
       WHERE s.provider_id = $1
       GROUP BY s.id
       ORDER BY s.created_at DESC
-    `, [req.user.id]);
+    `, [providerId]);
     
     console.log(`✅ Found ${result.rows.length} services for user ${req.user.id}`);
     
+    // Parse JSON fields
+    const parsedServices = result.rows.map(service => ({
+      ...service,
+      images: service.images ? (typeof service.images === 'string' ? JSON.parse(service.images) : service.images) : [],
+      amenities: service.amenities ? (typeof service.amenities === 'string' ? JSON.parse(service.amenities) : service.amenities) : [],
+      payment_methods: service.payment_methods ? (typeof service.payment_methods === 'string' ? JSON.parse(service.payment_methods) : service.payment_methods) : {},
+      contact_info: service.contact_info ? (typeof service.contact_info === 'string' ? JSON.parse(service.contact_info) : service.contact_info) : {}
+    }));
+    
     res.json({
       success: true,
-      services: result.rows
+      services: parsedServices
     });
   } catch (error) {
     console.error('❌ Error fetching provider services:', error);
@@ -260,9 +393,9 @@ router.post('/', authenticateJWT, async (req, res) => {
       });
     }
     
-    // GET LOCATION FROM PROVIDER PROFILE - This is the key fix!
+    // GET PROVIDER PROFILE - Get service_providers.id AND location
     const providerResult = await pool.query(`
-      SELECT region, district, area, ward, country, location, service_location
+      SELECT id, region, district, area, ward, country, location, service_location
       FROM service_providers
       WHERE user_id = $1
     `, [req.user.id]);
@@ -275,8 +408,9 @@ router.post('/', authenticateJWT, async (req, res) => {
     }
     
     const provider = providerResult.rows[0];
+    console.log('✅ Using service_providers.id:', provider.id);
     
-    // Insert service into database with provider's location
+    // Insert service into database with CORRECT provider_id (service_providers.id)
     const result = await pool.query(`
       INSERT INTO services (
         provider_id,
@@ -300,7 +434,7 @@ router.post('/', authenticateJWT, async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
-      req.user.id,
+      provider.id,  // FIXED: Use service_providers.id instead of user_id
       title,
       description || '',
       category,
@@ -346,10 +480,25 @@ router.patch('/:id/status', authenticateJWT, async (req, res) => {
     
     console.log(`🔄 Updating service ${id} status to:`, is_active);
     
+    // Get service_providers.id for the current user
+    const providerResult = await pool.query(
+      'SELECT id FROM service_providers WHERE user_id = $1',
+      [req.user.id]
+    );
+    
+    if (providerResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider profile not found'
+      });
+    }
+    
+    const providerId = providerResult.rows[0].id;
+    
     // Verify service belongs to user
     const checkResult = await pool.query(
       'SELECT * FROM services WHERE id = $1 AND provider_id = $2',
-      [id, req.user.id]
+      [id, providerId]
     );
     
     if (checkResult.rows.length === 0) {
@@ -362,7 +511,7 @@ router.patch('/:id/status', authenticateJWT, async (req, res) => {
     // Update status
     const result = await pool.query(
       'UPDATE services SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND provider_id = $3 RETURNING *',
-      [is_active, id, req.user.id]
+      [is_active, id, providerId]
     );
     
     console.log('✅ Service status updated successfully');
@@ -401,10 +550,25 @@ router.put('/:id', authenticateJWT, async (req, res) => {
       contactInfo
     } = req.body;
     
+    // Get service_providers.id for the current user
+    const providerResult = await pool.query(
+      'SELECT id FROM service_providers WHERE user_id = $1',
+      [req.user.id]
+    );
+    
+    if (providerResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider profile not found'
+      });
+    }
+    
+    const providerId = providerResult.rows[0].id;
+    
     // Verify service belongs to user
     const checkResult = await pool.query(
       'SELECT * FROM services WHERE id = $1 AND provider_id = $2',
-      [id, req.user.id]
+      [id, providerId]
     );
     
     if (checkResult.rows.length === 0) {
@@ -442,7 +606,7 @@ router.put('/:id', authenticateJWT, async (req, res) => {
       JSON.stringify(paymentMethods || {}),
       JSON.stringify(contactInfo || {}),
       id,
-      req.user.id
+      providerId
     ]);
     
     console.log('✅ Service updated successfully (location inherited from provider profile)');
@@ -468,10 +632,25 @@ router.delete('/:id', authenticateJWT, async (req, res) => {
     const { id } = req.params;
     console.log(`🗑️ Deleting service ${id} for user:`, req.user.id);
     
+    // Get service_providers.id for the current user
+    const providerResult = await pool.query(
+      'SELECT id FROM service_providers WHERE user_id = $1',
+      [req.user.id]
+    );
+    
+    if (providerResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider profile not found'
+      });
+    }
+    
+    const providerId = providerResult.rows[0].id;
+    
     // Verify service belongs to user
     const checkResult = await pool.query(
       'SELECT * FROM services WHERE id = $1 AND provider_id = $2',
-      [id, req.user.id]
+      [id, providerId]
     );
     
     if (checkResult.rows.length === 0) {
@@ -484,7 +663,7 @@ router.delete('/:id', authenticateJWT, async (req, res) => {
     // Delete service
     await pool.query(
       'DELETE FROM services WHERE id = $1 AND provider_id = $2',
-      [id, req.user.id]
+      [id, providerId]
     );
     
     console.log('✅ Service deleted successfully');
