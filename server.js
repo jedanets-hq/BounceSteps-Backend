@@ -40,8 +40,16 @@ const providerPaymentsRoutes = require('./routes/providerPayments');
 const { authenticateAdmin } = require('./middleware/adminAuth');
 
 // ============================================
-// CORS FIX - Allow ALL origins
+// CORS Configuration - Allow specific origins
 // ============================================
+const allowedOrigins = [
+  'https://bouncesteps.com',
+  'https://www.bouncesteps.com',
+  'https://bounce-steps-front-end-git-main-jedanets-hqs-projects.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
@@ -51,11 +59,15 @@ app.use((req, res, next) => {
     origin: origin || 'no-origin'
   });
   
-  // Set CORS headers for ANY origin
-  if (origin) {
+  // Check if origin is allowed
+  if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
+    console.log('✅ CORS allowed for:', origin);
+  } else if (!origin) {
+    // Allow requests with no origin (like Postman, curl)
     res.setHeader('Access-Control-Allow-Origin', '*');
+  } else {
+    console.log('⚠️  CORS blocked for:', origin);
   }
   
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -69,13 +81,22 @@ app.use((req, res, next) => {
     return res.status(204).end();
   }
   
-  console.log('✅ CORS headers set');
   next();
 });
 
-// Backup CORS middleware (should not be needed but kept for safety)
+// Backup CORS middleware
 app.use(cors({
-  origin: true,
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('⚠️  CORS blocked by backup middleware:', origin);
+      callback(null, false);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'expires', 'cache-control', 'pragma'],
