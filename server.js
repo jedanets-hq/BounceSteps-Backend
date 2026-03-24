@@ -45,6 +45,7 @@ const { authenticateAdmin } = require('./middleware/adminAuth');
 const allowedOrigins = [
   'https://bouncesteps.com',
   'https://www.bouncesteps.com',
+  'https://bounce-steps-front-end.vercel.app',
   'https://bounce-steps-front-end-git-main-jedanets-hqs-projects.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000'
