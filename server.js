@@ -68,6 +68,7 @@ const corsOptions = {
       'https://www.bouncesteps.com',
       'http://bouncesteps.com',
       'http://www.bouncesteps.com',
+      /\.bouncesteps\.com$/,  // Allows all bouncesteps subdomains
       /\.netlify\.app$/,  // Allows all Netlify subdomains
       /\.run\.app$/  // Allows all Google Cloud Run domains
     ];
@@ -120,6 +121,23 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'expires', 'cache-control', 'pragma'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
 };
+
+// Explicit preflight handler - ensures OPTIONS always returns CORS headers
+// This runs BEFORE cors() middleware as a safety net for Cloud Run
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, expires, cache-control, pragma');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
+  }
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
 
 // Middleware
 app.use(cors(corsOptions));
