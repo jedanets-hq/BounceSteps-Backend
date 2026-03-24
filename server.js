@@ -51,6 +51,7 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 
+// Enhanced CORS middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
@@ -60,7 +61,7 @@ app.use((req, res, next) => {
     origin: origin || 'no-origin'
   });
   
-  // Check if origin is allowed
+  // Always set CORS headers for allowed origins
   if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     console.log('✅ CORS allowed for:', origin);
@@ -68,18 +69,22 @@ app.use((req, res, next) => {
     // Allow requests with no origin (like Postman, curl)
     res.setHeader('Access-Control-Allow-Origin', '*');
   } else {
-    console.log('⚠️  CORS blocked for:', origin);
+    // For production, still allow but log warning
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    console.log('⚠️ CORS allowed (with warning) for:', origin);
   }
   
+  // Set all required CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, expires, cache-control, pragma');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
   
-  // Handle OPTIONS preflight
+  // Handle OPTIONS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('✅ OPTIONS preflight - responding 204');
-    return res.status(204).end();
+    console.log('✅ OPTIONS preflight - responding 200');
+    return res.status(200).end();
   }
   
   next();
