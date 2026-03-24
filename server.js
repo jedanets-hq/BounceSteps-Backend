@@ -90,23 +90,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Backup CORS middleware
+// Backup CORS middleware - ALLOW ALL ORIGINS FOR PRODUCTION FIX
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('❌ CORS blocked origin:', origin);
-      // Allow anyway but log the warning - don't block
-      callback(null, true);
-    }
-  },
+  origin: true, // Allow all origins
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'expires', 'cache-control', 'pragma'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'expires', 'cache-control', 'pragma', 'X-Requested-With', 'Accept'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
 
