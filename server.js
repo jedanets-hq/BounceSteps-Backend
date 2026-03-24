@@ -39,108 +39,49 @@ const providerPaymentsRoutes = require('./routes/providerPayments');
 // Admin middleware
 const { authenticateAdmin } = require('./middleware/adminAuth');
 
-// CORS Configuration for Production
-const corsOptions = {
-  origin: function (origin, callback) {
-    console.log('🔍 CORS check for origin:', origin);
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      console.log('✅ No origin - allowing');
-      return callback(null, true);
-    }
-    
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    console.log('🌐 Environment:', isDevelopment ? 'development' : 'production');
-    
-    // List of allowed origins
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:5176',  // Admin Portal
-      'http://localhost:4028',  // Added for Vite dev server
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-      // Production domains
-      'https://bouncesteps.com',
-      'https://www.bouncesteps.com',
-      'http://bouncesteps.com',
-      'http://www.bouncesteps.com',
-      /\.bouncesteps\.com$/,  // Allows all bouncesteps subdomains
-      /\.netlify\.app$/,  // Allows all Netlify subdomains
-      /\.run\.app$/  // Allows all Google Cloud Run domains
-    ];
-    
-    // In development, allow all localhost origins
-    if (isDevelopment && origin.startsWith('http://localhost:')) {
-      console.log('✅ Development localhost - allowing');
-      return callback(null, true);
-    }
-    
-    // Check if origin is allowed
-    try {
-      const isAllowed = allowedOrigins.some(allowedOrigin => {
-        if (typeof allowedOrigin === 'string') {
-          const matches = origin === allowedOrigin;
-          console.log(`  Checking string "${allowedOrigin}": ${matches}`);
-          return matches;
-        }
-        if (allowedOrigin instanceof RegExp) {
-          const matches = allowedOrigin.test(origin);
-          console.log(`  Checking regex ${allowedOrigin}: ${matches}`);
-          return matches;
-        }
-        return false;
-      });
-      
-      if (isAllowed) {
-        console.log('✅ Origin allowed');
-        callback(null, true);
-      } else {
-        console.log('❌ CORS blocked origin:', origin);
-        console.log('   Allowed origins:', allowedOrigins.filter(o => typeof o === 'string'));
-        if (isDevelopment) {
-          console.log('⚠️  Development mode - allowing anyway');
-          callback(null, true);
-        } else {
-          // In production, allow anyway to prevent blocking
-          console.log('⚠️  Production mode - allowing anyway to prevent blocking');
-          callback(null, true);
-        }
-      }
-    } catch (error) {
-      console.error('❌ CORS error:', error);
-      // Allow the request anyway to prevent 500 errors
-      callback(null, true);
-    }
-  },
+// ============================================
+// CORS FIX - Allow ALL origins
+// ============================================
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  console.log('🔍 Request:', {
+    method: req.method,
+    path: req.path,
+    origin: origin || 'no-origin'
+  });
+  
+  // Set CORS headers for ANY origin
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, expires, cache-control, pragma');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
+  
+  // Handle OPTIONS preflight
+  if (req.method === 'OPTIONS') {
+    console.log('✅ OPTIONS preflight - responding 204');
+    return res.status(204).end();
+  }
+  
+  console.log('✅ CORS headers set');
+  next();
+});
+
+// Backup CORS middleware (should not be needed but kept for safety)
+app.use(cors({
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'expires', 'cache-control', 'pragma'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
-};
+}));
 
-// Explicit preflight handler - ensures OPTIONS always returns CORS headers
-// This runs BEFORE cors() middleware as a safety net for Cloud Run
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, expires, cache-control, pragma');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
-  }
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-  next();
-});
-
-// Middleware
-app.use(cors(corsOptions));
 // Increase body size limit to 50MB for image uploads (base64 encoded images are large)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -327,7 +268,7 @@ async function startServer() {
       console.log('========================================');
       console.log(`📍 Port: ${PORT}`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔒 CORS: Enabled for production domains`);
+      console.log(`🔒 CORS: ✅ ALLOW ALL ORIGINS`);
       console.log(`🗄️  Database: ${dbOk ? '✅ Connected' : '❌ Not Connected'}`);
       console.log(`🔑 JWT: ${jwtOk ? '✅ Configured' : '❌ Not Configured'}`);
       console.log('========================================');
