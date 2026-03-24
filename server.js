@@ -58,6 +58,10 @@ const corsOptions = {
       'http://localhost:3001',
       'http://localhost:3002',
       // Production domains
+      'https://bouncesteps.com',
+      'https://www.bouncesteps.com',
+      'http://bouncesteps.com',
+      'http://www.bouncesteps.com',
       /\.netlify\.app$/,  // Allows all Netlify subdomains
       /\.run\.app$/  // Allows all Google Cloud Run domains
     ];
