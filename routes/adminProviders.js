@@ -161,4 +161,120 @@ router.patch('/:id/verification', async (req, res) => {
   }
 });
 
+// Verify provider (POST for Verification.jsx compatibility)
+router.post('/:id/verify', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'UPDATE service_providers SET is_verified = true, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Provider not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Provider verified successfully',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Admin provider verify error:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify provider', error: error.message });
+  }
+});
+
+// Unverify provider (POST for Verification.jsx compatibility)
+router.post('/:id/unverify', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'UPDATE service_providers SET is_verified = false, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Provider not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Provider verification revoked',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Admin provider unverify error:', error);
+    res.status(500).json({ success: false, message: 'Failed to unverify provider', error: error.message });
+  }
+});
+
+// Assign badge to provider
+router.post('/:id/badge', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { badgeType, notes } = req.body;
+
+    const validBadges = ['verified', 'premium', 'top_rated', 'eco_friendly', 'local_expert'];
+    if (!validBadges.includes(badgeType)) {
+      return res.status(400).json({ success: false, message: 'Invalid badge type' });
+    }
+
+    // Try to update badge_type column if it exists, otherwise use is_verified
+    let result;
+    try {
+      result = await pool.query(
+        'UPDATE service_providers SET badge_type = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+        [badgeType, id]
+      );
+    } catch (err) {
+      // Fall back to is_verified if badge_type column doesn't exist
+      result = await pool.query(
+        'UPDATE service_providers SET is_verified = true, updated_at = NOW() WHERE id = $1 RETURNING *',
+        [id]
+      );
+    }
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Provider not found' });
+    }
+
+    res.json({ success: true, message: 'Badge assigned successfully', data: result.rows[0] });
+  } catch (error) {
+    console.error('Admin provider badge error:', error);
+    res.status(500).json({ success: false, message: 'Failed to assign badge', error: error.message });
+  }
+});
+
+// Remove badge from provider
+router.delete('/:id/badge', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let result;
+    try {
+      result = await pool.query(
+        'UPDATE service_providers SET badge_type = NULL, updated_at = NOW() WHERE id = $1 RETURNING *',
+        [id]
+      );
+    } catch (err) {
+      result = await pool.query(
+        'UPDATE service_providers SET is_verified = false, updated_at = NOW() WHERE id = $1 RETURNING *',
+        [id]
+      );
+    }
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Provider not found' });
+    }
+
+    res.json({ success: true, message: 'Badge removed successfully', data: result.rows[0] });
+  } catch (error) {
+    console.error('Admin provider badge remove error:', error);
+    res.status(500).json({ success: false, message: 'Failed to remove badge', error: error.message });
+  }
+});
+
 module.exports = router;

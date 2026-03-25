@@ -201,4 +201,47 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
+// Suspend user
+router.post('/:id/suspend', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const result = await pool.query(
+      'UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING id, email, is_active',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({ success: true, message: 'User suspended successfully', data: result.rows[0] });
+  } catch (error) {
+    console.error('Admin user suspend error:', error);
+    res.status(500).json({ success: false, message: 'Failed to suspend user', error: error.message });
+  }
+});
+
+// Restore user
+router.post('/:id/restore', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'UPDATE users SET is_active = true, updated_at = NOW() WHERE id = $1 RETURNING id, email, is_active',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({ success: true, message: 'User restored successfully', data: result.rows[0] });
+  } catch (error) {
+    console.error('Admin user restore error:', error);
+    res.status(500).json({ success: false, message: 'Failed to restore user', error: error.message });
+  }
+});
+
 module.exports = router;

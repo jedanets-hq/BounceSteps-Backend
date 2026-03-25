@@ -179,7 +179,7 @@ router.get('/accounts', async (req, res) => {
 
     res.json({
       success: true,
-      data: result.rows
+      accounts: result.rows
     });
   } catch (error) {
     console.error('Admin payment accounts error:', error);
@@ -188,6 +188,68 @@ router.get('/accounts', async (req, res) => {
       message: 'Failed to fetch payment accounts',
       error: error.message 
     });
+  }
+});
+
+// Create payment account
+router.post('/accounts', async (req, res) => {
+  try {
+    const { account_type, account_holder_name, account_number, bank_name, card_last_four, expiry_date, mobile_number, is_primary } = req.body;
+
+    const result = await pool.query(`
+      INSERT INTO admin_payment_accounts 
+        (account_type, account_holder_name, account_number, bank_name, card_last_four, expiry_date, mobile_number, is_primary, is_active, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NOW(), NOW())
+      RETURNING *
+    `, [account_type, account_holder_name, account_number, bank_name || null, card_last_four || null, expiry_date || null, mobile_number || null, is_primary || false]);
+
+    res.json({ success: true, message: 'Payment account created', data: result.rows[0] });
+  } catch (error) {
+    console.error('Admin create account error:', error);
+    res.status(500).json({ success: false, message: 'Failed to create payment account', error: error.message });
+  }
+});
+
+// Update payment account
+router.put('/accounts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { account_type, account_holder_name, account_number, bank_name, card_last_four, expiry_date, mobile_number, is_primary } = req.body;
+
+    const result = await pool.query(`
+      UPDATE admin_payment_accounts
+      SET account_type=$1, account_holder_name=$2, account_number=$3, bank_name=$4,
+          card_last_four=$5, expiry_date=$6, mobile_number=$7, is_primary=$8, updated_at=NOW()
+      WHERE id=$9
+      RETURNING *
+    `, [account_type, account_holder_name, account_number, bank_name || null, card_last_four || null, expiry_date || null, mobile_number || null, is_primary || false, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
+
+    res.json({ success: true, message: 'Payment account updated', data: result.rows[0] });
+  } catch (error) {
+    console.error('Admin update account error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update payment account', error: error.message });
+  }
+});
+
+// Delete payment account
+router.delete('/accounts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query('DELETE FROM admin_payment_accounts WHERE id=$1 RETURNING id', [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
+
+    res.json({ success: true, message: 'Payment account deleted' });
+  } catch (error) {
+    console.error('Admin delete account error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete payment account', error: error.message });
   }
 });
 
