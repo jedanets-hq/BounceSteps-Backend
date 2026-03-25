@@ -1,10 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/postgresql');
+
+// Database connection with error handling
+let pool;
+try {
+  pool = require('../config/postgresql').pool;
+} catch (error) {
+  console.warn('⚠️ Database connection not available for admin services');
+}
 
 // Get services with pagination and filtering
 router.get('/', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: {
+          services: [],
+          pagination: {
+            page: parseInt(req.query.page) || 1,
+            limit: parseInt(req.query.limit) || 20,
+            total: 0,
+            pages: 0
+          },
+          message: 'Database connection required for service data'
+        }
+      });
+    }
+
     const { 
       page = 1, 
       limit = 20,
@@ -101,6 +124,19 @@ router.get('/', async (req, res) => {
 // Get service statistics
 router.get('/stats', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: {
+          total: 0,
+          active: 0,
+          pending: 0,
+          categories: [],
+          message: 'Database connection required for service statistics'
+        }
+      });
+    }
+
     const [totalResult, activeResult, pendingResult, categoriesResult] = await Promise.all([
       pool.query('SELECT COUNT(*) as count FROM services'),
       pool.query("SELECT COUNT(*) as count FROM services WHERE status = 'active'"),
@@ -129,6 +165,14 @@ router.get('/stats', async (req, res) => {
 // Get service categories
 router.get('/categories', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'Database connection required for service categories'
+      });
+    }
+
     const result = await pool.query(`
       SELECT 
         category,

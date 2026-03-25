@@ -1,10 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/postgresql');
+
+// Database connection with error handling
+let pool;
+try {
+  pool = require('../config/postgresql').pool;
+} catch (error) {
+  console.warn('⚠️ Database connection not available for admin payments');
+}
 
 // Get payments with pagination and filtering
 router.get('/', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: {
+          payments: [],
+          pagination: {
+            page: parseInt(req.query.page) || 1,
+            limit: parseInt(req.query.limit) || 20,
+            total: 0,
+            pages: 0
+          },
+          message: 'Database connection required for payment data'
+        }
+      });
+    }
+
     const { 
       page = 1, 
       limit = 20,
@@ -101,6 +124,19 @@ router.get('/', async (req, res) => {
 // Get payment statistics
 router.get('/stats', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: {
+          total: 0,
+          successful: 0,
+          pending: 0,
+          totalRevenue: 0,
+          message: 'Database connection required for payment statistics'
+        }
+      });
+    }
+
     const [totalResult, successfulResult, pendingResult, revenueResult] = await Promise.all([
       pool.query('SELECT COUNT(*) as count FROM promotion_payments'),
       pool.query("SELECT COUNT(*) as count FROM promotion_payments WHERE status = 'completed'"),
@@ -129,6 +165,14 @@ router.get('/stats', async (req, res) => {
 // Get verification requests (using admin_payment_accounts)
 router.get('/verification-requests', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'Database connection required for verification requests'
+      });
+    }
+
     const { status = 'pending' } = req.query;
 
     // Since admin_payment_accounts doesn't have provider_id, 
@@ -164,6 +208,14 @@ router.get('/verification-requests', async (req, res) => {
 // Get payment accounts (for provider payouts)
 router.get('/accounts', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        accounts: [],
+        message: 'Database connection required for payment accounts'
+      });
+    }
+
     const query = `
       SELECT 
         apa.id, apa.account_type, apa.account_holder_name,

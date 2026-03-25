@@ -1,22 +1,95 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/postgresql');
 
-// Import individual admin route modules
-const adminAuthRoutes = require('./adminAuth');
-const adminUsersRoutes = require('./adminUsers');
-const adminProvidersRoutes = require('./adminProviders');
-const adminPaymentsRoutes = require('./adminPayments');
-const adminDashboardRoutes = require('./adminDashboard');
-const adminServicesRoutes = require('./adminServices');
+// Test endpoint to verify admin routes are working
+router.get('/test', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Admin routes are working',
+    timestamp: new Date().toISOString()
+  });
+});
 
-// Mount individual admin route modules
-router.use('/auth', adminAuthRoutes);
-router.use('/users', adminUsersRoutes);
-router.use('/providers', adminProvidersRoutes);
-router.use('/payments', adminPaymentsRoutes);
-router.use('/dashboard', adminDashboardRoutes);
-router.use('/services', adminServicesRoutes);
+// Import individual admin route modules with error handling
+let adminAuthRoutes, adminUsersRoutes, adminProvidersRoutes, adminPaymentsRoutes, adminDashboardRoutes, adminServicesRoutes;
+
+try {
+  adminAuthRoutes = require('./adminAuth');
+  adminUsersRoutes = require('./adminUsers');
+  adminProvidersRoutes = require('./adminProviders');
+  adminPaymentsRoutes = require('./adminPayments');
+  adminDashboardRoutes = require('./adminDashboard');
+  adminServicesRoutes = require('./adminServices');
+
+  // Mount individual admin route modules
+  router.use('/auth', adminAuthRoutes);
+  router.use('/users', adminUsersRoutes);
+  router.use('/providers', adminProvidersRoutes);
+  router.use('/payments', adminPaymentsRoutes);
+  router.use('/dashboard', adminDashboardRoutes);
+  router.use('/services', adminServicesRoutes);
+  
+  console.log('✅ All admin routes loaded successfully');
+} catch (error) {
+  console.error('❌ Error loading admin routes:', error.message);
+  
+  // Create fallback routes that return proper error messages
+  router.get('/dashboard/stats', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'Admin dashboard temporarily unavailable',
+      error: 'Database connection required'
+    });
+  });
+  
+  router.get('/dashboard/activity', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'Admin dashboard temporarily unavailable',
+      error: 'Database connection required'
+    });
+  });
+  
+  router.get('/users', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'Admin users temporarily unavailable',
+      error: 'Database connection required'
+    });
+  });
+  
+  router.get('/providers', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'Admin providers temporarily unavailable',
+      error: 'Database connection required'
+    });
+  });
+  
+  router.get('/services', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'Admin services temporarily unavailable',
+      error: 'Database connection required'
+    });
+  });
+  
+  router.get('/payments', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'Admin payments temporarily unavailable',
+      error: 'Database connection required'
+    });
+  });
+}
+
+// Database connection for existing endpoints
+let pool;
+try {
+  pool = require('../config/postgresql').pool;
+} catch (error) {
+  console.warn('⚠️ Database connection not available for admin routes');
+}
 
 // Get trusted partners (public endpoint for homepage)
 router.get('/trusted-partners', async (req, res) => {
@@ -40,6 +113,18 @@ router.get('/trusted-partners', async (req, res) => {
 // Get public trust statistics (for homepage)
 router.get('/public/trust-stats', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        stats: {
+          totalTravelers: 0,
+          totalBookings: 0,
+          averageRating: 0,
+          totalDestinations: 0
+        }
+      });
+    }
+
     // Get total travelers
     const travelersResult = await pool.query(
       "SELECT COUNT(*) as count FROM users WHERE user_type = 'traveler'"

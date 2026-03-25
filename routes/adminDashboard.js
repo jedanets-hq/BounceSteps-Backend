@@ -1,10 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/postgresql');
+
+// Database connection with error handling
+let pool;
+try {
+  pool = require('../config/postgresql').pool;
+} catch (error) {
+  console.warn('⚠️ Database connection not available for admin dashboard');
+}
 
 // Dashboard stats endpoint
 router.get('/stats', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: {
+          users: 0,
+          providers: 0,
+          bookings: 0,
+          services: 0,
+          revenue: 0,
+          period: req.query.period || '30days',
+          growth: { userGrowth: [] },
+          message: 'Database connection required for live data'
+        }
+      });
+    }
+
     const { period = '30days' } = req.query;
     
     // Calculate date range based on period
@@ -86,6 +109,14 @@ router.get('/stats', async (req, res) => {
 // Dashboard activity endpoint
 router.get('/activity', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'Database connection required for live activity data'
+      });
+    }
+
     const { limit = 10 } = req.query;
 
     const activities = [];

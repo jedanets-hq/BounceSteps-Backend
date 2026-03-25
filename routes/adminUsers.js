@@ -1,10 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/postgresql');
+
+// Database connection with error handling
+let pool;
+try {
+  pool = require('../config/postgresql').pool;
+} catch (error) {
+  console.warn('⚠️ Database connection not available for admin users');
+}
 
 // Get users with pagination and filtering
 router.get('/', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        data: {
+          users: [],
+          pagination: {
+            page: parseInt(req.query.page) || 1,
+            limit: parseInt(req.query.limit) || 20,
+            total: 0,
+            pages: 0
+          },
+          message: 'Database connection required for user data'
+        }
+      });
+    }
+
     const { 
       page = 1, 
       limit = 20, 
