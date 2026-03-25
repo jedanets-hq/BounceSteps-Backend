@@ -131,20 +131,21 @@ router.get('/verification-requests', async (req, res) => {
   try {
     const { status = 'pending' } = req.query;
 
+    // Since admin_payment_accounts doesn't have provider_id, 
+    // we'll return empty array for now or use created_by as user reference
     const query = `
       SELECT 
-        apa.id, apa.provider_id, apa.status, apa.account_details, 
-        apa.created_at, apa.updated_at,
-        sp.business_name, sp.business_type,
+        apa.id, apa.account_type, apa.account_holder_name, 
+        apa.account_number, apa.bank_name, apa.mobile_number,
+        apa.is_active, apa.created_at, apa.updated_at,
         u.email, u.first_name, u.last_name
       FROM admin_payment_accounts apa
-      LEFT JOIN service_providers sp ON apa.provider_id = sp.id
-      LEFT JOIN users u ON sp.user_id = u.id
-      WHERE apa.status = $1
+      LEFT JOIN users u ON apa.created_by = u.id
+      WHERE apa.is_active = false
       ORDER BY apa.created_at DESC
     `;
 
-    const result = await pool.query(query, [status]);
+    const result = await pool.query(query);
 
     res.json({
       success: true,
@@ -165,13 +166,12 @@ router.get('/accounts', async (req, res) => {
   try {
     const query = `
       SELECT 
-        apa.id, apa.provider_id, apa.account_type, apa.account_details,
-        apa.is_verified, apa.created_at,
-        sp.business_name, sp.business_type,
+        apa.id, apa.account_type, apa.account_holder_name,
+        apa.account_number, apa.bank_name, apa.mobile_number,
+        apa.is_active, apa.created_at,
         u.email, u.first_name, u.last_name
       FROM admin_payment_accounts apa
-      LEFT JOIN service_providers sp ON apa.provider_id = sp.id
-      LEFT JOIN users u ON sp.user_id = u.id
+      LEFT JOIN users u ON apa.created_by = u.id
       ORDER BY apa.created_at DESC
     `;
 
@@ -228,11 +228,6 @@ router.get('/:id', async (req, res) => {
       error: error.message 
     });
   }
-});
-
-// Health check
-router.get('/health', (req, res) => {
-  res.json({ success: true, message: 'Admin payments route working' });
 });
 
 module.exports = router;

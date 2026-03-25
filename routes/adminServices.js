@@ -234,9 +234,4 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
-// Health check
-router.get('/health', (req, res) => {
-  res.json({ success: true, message: 'Admin services route working' });
-});
-
 module.exports = router;

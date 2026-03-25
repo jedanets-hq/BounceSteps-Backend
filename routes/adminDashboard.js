@@ -177,9 +177,4 @@ router.get('/activity', async (req, res) => {
   }
 });
 
-// Basic health check
-router.get('/health', (req, res) => {
-  res.json({ success: true, message: 'Admin dashboard route working' });
-});
-
 module.exports = router;

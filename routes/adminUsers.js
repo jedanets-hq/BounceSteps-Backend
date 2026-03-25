@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
     let paramIndex = 1;
 
     if (search) {
-      whereConditions.push(`(name ILIKE $${paramIndex} OR email ILIKE $${paramIndex})`);
+      whereConditions.push(`(first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR email ILIKE $${paramIndex})`);
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
@@ -45,8 +45,19 @@ router.get('/', async (req, res) => {
     // Get users with pagination
     const usersQuery = `
       SELECT 
-        id, name, email, user_type, status, created_at, updated_at,
-        phone, profile_image, location
+        id, 
+        first_name || ' ' || last_name as name,
+        email, 
+        user_type, 
+        CASE 
+          WHEN is_active = true THEN 'active'
+          ELSE 'inactive'
+        END as status,
+        created_at, 
+        updated_at,
+        phone, 
+        avatar_url as profile_image, 
+        'N/A' as location
       FROM users 
       ${whereClause}
       ORDER BY created_at DESC 
@@ -103,8 +114,20 @@ router.get('/:id', async (req, res) => {
     
     const result = await pool.query(`
       SELECT 
-        id, name, email, user_type, status, created_at, updated_at,
-        phone, profile_image, location, bio
+        id, 
+        first_name || ' ' || last_name as name,
+        email, 
+        user_type, 
+        CASE 
+          WHEN is_active = true THEN 'active'
+          ELSE 'inactive'
+        END as status,
+        created_at, 
+        updated_at,
+        phone, 
+        avatar_url as profile_image, 
+        'N/A' as location,
+        'N/A' as bio
       FROM users 
       WHERE id = $1
     `, [id]);
@@ -146,10 +169,14 @@ router.patch('/:id/status', async (req, res) => {
 
     const result = await pool.query(`
       UPDATE users 
-      SET status = $1, updated_at = NOW() 
+      SET is_active = $1, updated_at = NOW() 
       WHERE id = $2 
-      RETURNING id, name, email, status
-    `, [status, id]);
+      RETURNING id, first_name || ' ' || last_name as name, email, 
+      CASE 
+        WHEN is_active = true THEN 'active'
+        ELSE 'inactive'
+      END as status
+    `, [status === 'active', id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -172,11 +199,6 @@ router.patch('/:id/status', async (req, res) => {
       error: error.message
     });
   }
-});
-
-// Basic health check
-router.get('/health', (req, res) => {
-  res.json({ success: true, message: 'Admin users route working' });
 });
 
 module.exports = router;

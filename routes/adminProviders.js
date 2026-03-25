@@ -161,9 +161,4 @@ router.patch('/:id/verification', async (req, res) => {
   }
 });
 
-// Health check
-router.get('/health', (req, res) => {
-  res.json({ success: true, message: 'Admin providers route working' });
-});
-
 module.exports = router;
