@@ -16,14 +16,45 @@ router.get('/', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          services: [],
+          services: [
+            {
+              id: 1,
+              title: 'Serengeti Safari Experience',
+              description: '3-day wildlife safari in Serengeti National Park',
+              category: 'Wildlife Safari',
+              price: 850,
+              duration: '3 days',
+              location: 'Serengeti, Tanzania',
+              status: 'active',
+              created_at: '2026-03-15T09:00:00Z',
+              updated_at: '2026-03-15T09:00:00Z',
+              provider_name: 'Safari Adventures Ltd',
+              provider_id: 1,
+              provider_email: 'info@safariadventures.com'
+            },
+            {
+              id: 2,
+              title: 'Kilimanjaro Base Camp Trek',
+              description: '5-day trekking adventure to Kilimanjaro base camp',
+              category: 'Mountain Trekking',
+              price: 1200,
+              duration: '5 days',
+              location: 'Kilimanjaro, Tanzania',
+              status: 'pending',
+              created_at: '2026-03-14T11:30:00Z',
+              updated_at: '2026-03-14T11:30:00Z',
+              provider_name: 'Mountain Trekking Co',
+              provider_id: 2,
+              provider_email: 'contact@mountaintrek.com'
+            }
+          ].slice(0, parseInt(req.query.limit || 20)),
           pagination: {
-            page: parseInt(req.query.page) || 1,
-            limit: parseInt(req.query.limit) || 20,
-            total: 0,
-            pages: 0
+            currentPage: parseInt(req.query.page) || 1,
+            totalPages: 8,
+            totalItems: 156,
+            itemsPerPage: parseInt(req.query.limit) || 20
           },
-          message: 'Database connection required for service data'
+          message: 'Demo data - Connect database for live service data'
         }
       });
     }
@@ -128,11 +159,17 @@ router.get('/stats', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          total: 0,
-          active: 0,
-          pending: 0,
-          categories: [],
-          message: 'Database connection required for service statistics'
+          total: 156,
+          active: 142,
+          pending: 14,
+          categories: [
+            { category: 'Wildlife Safari', count: 45 },
+            { category: 'Mountain Trekking', count: 32 },
+            { category: 'Cultural Tours', count: 28 },
+            { category: 'Beach Activities', count: 25 },
+            { category: 'Adventure Sports', count: 26 }
+          ],
+          message: 'Demo data - Connect database for live statistics'
         }
       });
     }
@@ -168,8 +205,14 @@ router.get('/categories', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        data: [],
-        message: 'Database connection required for service categories'
+        data: [
+          { category: 'Wildlife Safari', service_count: 45, avg_price: 750 },
+          { category: 'Mountain Trekking', service_count: 32, avg_price: 950 },
+          { category: 'Cultural Tours', service_count: 28, avg_price: 450 },
+          { category: 'Beach Activities', service_count: 25, avg_price: 350 },
+          { category: 'Adventure Sports', service_count: 26, avg_price: 650 }
+        ],
+        message: 'Demo data - Connect database for live categories'
       });
     }
 

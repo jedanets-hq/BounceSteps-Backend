@@ -16,14 +16,22 @@ router.get('/stats', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          users: 0,
-          providers: 0,
-          bookings: 0,
-          services: 0,
-          revenue: 0,
+          users: 1250,
+          providers: 85,
+          bookings: 342,
+          services: 156,
+          revenue: 45780.50,
           period: req.query.period || '30days',
-          growth: { userGrowth: [] },
-          message: 'Database connection required for live data'
+          growth: {
+            userGrowth: [
+              { date: '2026-03-25', new_users: 12 },
+              { date: '2026-03-24', new_users: 8 },
+              { date: '2026-03-23', new_users: 15 },
+              { date: '2026-03-22', new_users: 10 },
+              { date: '2026-03-21', new_users: 18 }
+            ]
+          },
+          message: 'Demo data - Connect database for live statistics'
         }
       });
     }
@@ -112,8 +120,27 @@ router.get('/activity', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        data: [],
-        message: 'Database connection required for live activity data'
+        data: [
+          {
+            type: 'user_registration',
+            description: 'New user registered: John Doe',
+            timestamp: '2026-03-25T10:30:00Z',
+            details: { email: 'john.doe@example.com' }
+          },
+          {
+            type: 'booking_created',
+            description: 'New booking for Safari Tour',
+            timestamp: '2026-03-25T09:15:00Z',
+            details: { booking_date: '2026-04-01', amount: 450 }
+          },
+          {
+            type: 'provider_registration',
+            description: 'New provider: Safari Adventures Ltd',
+            timestamp: '2026-03-25T08:45:00Z',
+            details: { business_type: 'Tour Operator' }
+          }
+        ].slice(0, parseInt(req.query.limit || 10)),
+        message: 'Demo data - Connect database for live activity'
       });
     }
 

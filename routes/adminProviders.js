@@ -16,14 +16,59 @@ router.get('/', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          providers: [],
+          providers: [
+            {
+              id: 1,
+              business_name: 'Safari Adventures Ltd',
+              business_type: 'Tour Operator',
+              description: 'Premium safari experiences in Tanzania',
+              location: 'Arusha',
+              service_location: 'Serengeti, Ngorongoro',
+              country: 'Tanzania',
+              region: 'Arusha',
+              district: 'Arusha Urban',
+              area: 'Central',
+              ward: 'Kaloleni',
+              is_verified: true,
+              rating: 4.8,
+              total_bookings: 156,
+              created_at: '2026-03-18T12:00:00Z',
+              email: 'info@safariadventures.com',
+              first_name: 'John',
+              last_name: 'Safari',
+              phone: '+255123456789',
+              is_active: true
+            },
+            {
+              id: 2,
+              business_name: 'Mountain Trekking Co',
+              business_type: 'Adventure Sports',
+              description: 'Mountain climbing and trekking adventures',
+              location: 'Moshi',
+              service_location: 'Kilimanjaro',
+              country: 'Tanzania',
+              region: 'Kilimanjaro',
+              district: 'Moshi Urban',
+              area: 'Central',
+              ward: 'Kiboriloni',
+              is_verified: false,
+              rating: 4.5,
+              total_bookings: 89,
+              created_at: '2026-03-17T16:45:00Z',
+              email: 'contact@mountaintrek.com',
+              first_name: 'Jane',
+              last_name: 'Mountain',
+              phone: '+255987654321',
+              is_active: true
+            }
+          ].slice(0, parseInt(req.query.limit || 20)),
           pagination: {
-            page: parseInt(req.query.page) || 1,
-            limit: parseInt(req.query.limit) || 20,
-            total: 0,
-            pages: 0
+            currentPage: parseInt(req.query.page) || 1,
+            totalPages: 5,
+            totalItems: 85,
+            itemsPerPage: parseInt(req.query.limit) || 20
           },
-          message: 'Database connection required for provider data'
+          message: 'Demo data - Connect database for live provider data'
         }
       });
     }

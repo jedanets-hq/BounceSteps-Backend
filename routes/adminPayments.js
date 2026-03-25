@@ -16,14 +16,51 @@ router.get('/', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          payments: [],
+          payments: [
+            {
+              id: 1,
+              amount: 850,
+              currency: 'USD',
+              status: 'completed',
+              payment_method: 'credit_card',
+              transaction_reference: 'TXN_001_2026',
+              created_at: '2026-03-20T15:30:00Z',
+              updated_at: '2026-03-20T15:30:00Z',
+              payment_type: 'service_booking',
+              description: 'Safari booking payment',
+              duration_days: null,
+              provider_name: 'Safari Adventures Ltd',
+              provider_id: 1,
+              user_email: 'john.doe@example.com',
+              first_name: 'John',
+              last_name: 'Doe'
+            },
+            {
+              id: 2,
+              amount: 450,
+              currency: 'USD',
+              status: 'pending',
+              payment_method: 'bank_transfer',
+              transaction_reference: 'TXN_002_2026',
+              created_at: '2026-03-21T10:15:00Z',
+              updated_at: '2026-03-21T10:15:00Z',
+              payment_type: 'service_booking',
+              description: 'Cultural tour payment',
+              duration_days: null,
+              provider_name: 'Cultural Tours Inc',
+              provider_id: 3,
+              user_email: 'jane.smith@example.com',
+              first_name: 'Jane',
+              last_name: 'Smith'
+            }
+          ].slice(0, parseInt(req.query.limit || 20)),
           pagination: {
-            page: parseInt(req.query.page) || 1,
-            limit: parseInt(req.query.limit) || 20,
-            total: 0,
-            pages: 0
+            currentPage: parseInt(req.query.page) || 1,
+            totalPages: 18,
+            totalItems: 342,
+            itemsPerPage: parseInt(req.query.limit) || 20
           },
-          message: 'Database connection required for payment data'
+          message: 'Demo data - Connect database for live payment data'
         }
       });
     }
@@ -128,11 +165,11 @@ router.get('/stats', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          total: 0,
-          successful: 0,
-          pending: 0,
-          totalRevenue: 0,
-          message: 'Database connection required for payment statistics'
+          total: 342,
+          successful: 298,
+          pending: 44,
+          totalRevenue: 45780.50,
+          message: 'Demo data - Connect database for live statistics'
         }
       });
     }
@@ -169,7 +206,7 @@ router.get('/verification-requests', async (req, res) => {
       return res.json({
         success: true,
         data: [],
-        message: 'Database connection required for verification requests'
+        message: 'Demo data - Connect database for live verification requests'
       });
     }
 
@@ -211,8 +248,22 @@ router.get('/accounts', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        accounts: [],
-        message: 'Database connection required for payment accounts'
+        accounts: [
+          {
+            id: 1,
+            account_type: 'bank_account',
+            account_holder_name: 'iSafari Global Ltd',
+            account_number: '****1234',
+            bank_name: 'Standard Bank',
+            mobile_number: null,
+            is_active: true,
+            created_at: '2026-03-01T00:00:00Z',
+            email: 'admin@isafari.com',
+            first_name: 'Admin',
+            last_name: 'User'
+          }
+        ],
+        message: 'Demo data - Connect database for live account data'
       });
     }
 
