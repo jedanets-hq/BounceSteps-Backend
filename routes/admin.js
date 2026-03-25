@@ -2,6 +2,22 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/postgresql');
 
+// Import individual admin route modules
+const adminAuthRoutes = require('./adminAuth');
+const adminUsersRoutes = require('./adminUsers');
+const adminProvidersRoutes = require('./adminProviders');
+const adminPaymentsRoutes = require('./adminPayments');
+const adminDashboardRoutes = require('./adminDashboard');
+const adminServicesRoutes = require('./adminServices');
+
+// Mount individual admin route modules
+router.use('/auth', adminAuthRoutes);
+router.use('/users', adminUsersRoutes);
+router.use('/providers', adminProvidersRoutes);
+router.use('/payments', adminPaymentsRoutes);
+router.use('/dashboard', adminDashboardRoutes);
+router.use('/services', adminServicesRoutes);
+
 // Get trusted partners (public endpoint for homepage)
 router.get('/trusted-partners', async (req, res) => {
   try {

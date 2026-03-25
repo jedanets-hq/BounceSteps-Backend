@@ -25,13 +25,7 @@ const reviewsRoutes = require('./routes/reviews');
 const messagesRoutes = require('./routes/messages');
 const adminRoutes = require('./routes/admin');
 
-// Admin routes
-const adminAuthRoutes = require('./routes/adminAuth');
-const adminUsersRoutes = require('./routes/adminUsers');
-const adminProvidersRoutes = require('./routes/adminProviders');
-const adminPaymentsRoutes = require('./routes/adminPayments');
-const adminDashboardRoutes = require('./routes/adminDashboard');
-const adminServicesRoutes = require('./routes/adminServices');
+// Admin sub-routes are now mounted inside adminRoutes (routes/admin.js)
 
 // Provider payments route
 const providerPaymentsRoutes = require('./routes/providerPayments');
@@ -139,12 +133,6 @@ app.use('/api/fix', fixServicesRoutes);
 
 // Admin Portal Routes (No authentication required for local development)
 app.use('/api/admin', adminRoutes);
-app.use('/api/admin/auth', adminAuthRoutes);
-app.use('/api/admin/users', adminUsersRoutes);
-app.use('/api/admin/providers', adminProvidersRoutes);
-app.use('/api/admin/payments', adminPaymentsRoutes);
-app.use('/api/admin/dashboard', adminDashboardRoutes);
-app.use('/api/admin/services', adminServicesRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
