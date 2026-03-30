@@ -18,34 +18,35 @@ router.get('/', async (req, res) => {
         data: [
           {
             id: 1,
-            name: 'John Doe',
+            first_name: 'John',
+            last_name: 'Doe',
             email: 'john.doe@example.com',
             user_type: 'traveler',
-            status: 'active',
+            is_active: true,
             created_at: '2026-03-20T10:00:00Z',
             phone: '+255123456789',
-            profile_image: null,
-            location: 'Dar es Salaam'
+            avatar_url: null,
+            total_bookings: 5
           },
           {
             id: 2,
-            name: 'Jane Smith',
+            first_name: 'Jane',
+            last_name: 'Smith',
             email: 'jane.smith@example.com',
-            user_type: 'provider',
-            status: 'active',
+            user_type: 'service_provider',
+            is_active: true,
             created_at: '2026-03-19T14:30:00Z',
             phone: '+255987654321',
-            profile_image: null,
-            location: 'Arusha'
+            avatar_url: null,
+            total_bookings: 0,
+            business_name: 'Safari Adventures Ltd'
           }
         ].slice(0, parseInt(req.query.limit || 20)),
         pagination: {
           page: parseInt(req.query.page) || 1,
           limit: parseInt(req.query.limit) || 20,
           total: 1250,
-          totalPages: 63,
-          hasNext: true,
-          hasPrev: false
+          totalPages: 63
         },
         message: 'Demo data - Connect database for live user data'
       });
@@ -67,20 +68,21 @@ router.get('/', async (req, res) => {
     let paramIndex = 1;
 
     if (search) {
-      whereConditions.push(`(first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR email ILIKE $${paramIndex})`);
+      whereConditions.push(`(u.first_name ILIKE $${paramIndex} OR u.last_name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex})`);
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
     if (userType) {
-      whereConditions.push(`user_type = $${paramIndex}`);
+      whereConditions.push(`u.user_type = $${paramIndex}`);
       queryParams.push(userType);
       paramIndex++;
     }
 
     if (status) {
-      whereConditions.push(`status = $${paramIndex}`);
-      queryParams.push(status);
+      const isActive = status === 'active';
+      whereConditions.push(`u.is_active = $${paramIndex}`);
+      queryParams.push(isActive);
       paramIndex++;
     }
 
@@ -91,22 +93,22 @@ router.get('/', async (req, res) => {
     // Get users with pagination
     const usersQuery = `
       SELECT 
-        id, 
-        first_name || ' ' || last_name as name,
-        email, 
-        user_type, 
-        CASE 
-          WHEN is_active = true THEN 'active'
-          ELSE 'inactive'
-        END as status,
-        created_at, 
-        updated_at,
-        phone, 
-        avatar_url as profile_image, 
-        'N/A' as location
-      FROM users 
+        u.id, 
+        u.first_name,
+        u.last_name,
+        u.email, 
+        u.user_type, 
+        u.is_active,
+        u.created_at, 
+        u.updated_at,
+        u.phone, 
+        u.avatar_url,
+        sp.business_name,
+        (SELECT COUNT(*) FROM bookings WHERE user_id = u.id) as total_bookings
+      FROM users u
+      LEFT JOIN service_providers sp ON u.id = sp.user_id
       ${whereClause}
-      ORDER BY created_at DESC 
+      ORDER BY u.created_at DESC 
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
     
@@ -115,7 +117,7 @@ router.get('/', async (req, res) => {
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total 
-      FROM users 
+      FROM users u
       ${whereClause}
     `;
     
@@ -137,9 +139,7 @@ router.get('/', async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        totalPages,
-        hasNext: parseInt(page) < totalPages,
-        hasPrev: parseInt(page) > 1
+        totalPages
       }
     });
 
@@ -160,22 +160,21 @@ router.get('/:id', async (req, res) => {
     
     const result = await pool.query(`
       SELECT 
-        id, 
-        first_name || ' ' || last_name as name,
-        email, 
-        user_type, 
-        CASE 
-          WHEN is_active = true THEN 'active'
-          ELSE 'inactive'
-        END as status,
-        created_at, 
-        updated_at,
-        phone, 
-        avatar_url as profile_image, 
-        'N/A' as location,
-        'N/A' as bio
-      FROM users 
-      WHERE id = $1
+        u.id, 
+        u.first_name,
+        u.last_name,
+        u.email, 
+        u.user_type, 
+        u.is_active,
+        u.created_at, 
+        u.updated_at,
+        u.phone, 
+        u.avatar_url,
+        sp.business_name,
+        (SELECT COUNT(*) FROM bookings WHERE user_id = u.id) as total_bookings
+      FROM users u
+      LEFT JOIN service_providers sp ON u.id = sp.user_id
+      WHERE u.id = $1
     `, [id]);
 
     if (result.rows.length === 0) {
@@ -217,11 +216,7 @@ router.patch('/:id/status', async (req, res) => {
       UPDATE users 
       SET is_active = $1, updated_at = NOW() 
       WHERE id = $2 
-      RETURNING id, first_name || ' ' || last_name as name, email, 
-      CASE 
-        WHEN is_active = true THEN 'active'
-        ELSE 'inactive'
-      END as status
+      RETURNING id, first_name, last_name, email, is_active
     `, [status === 'active', id]);
 
     if (result.rows.length === 0) {
@@ -253,6 +248,8 @@ router.post('/:id/suspend', async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
 
+    console.log(`Suspending user ${id}, reason:`, reason);
+
     const result = await pool.query(
       'UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING id, email, is_active',
       [id]
@@ -262,6 +259,7 @@ router.post('/:id/suspend', async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    console.log('User suspended:', result.rows[0]);
     res.json({ success: true, message: 'User suspended successfully', data: result.rows[0] });
   } catch (error) {
     console.error('Admin user suspend error:', error);
@@ -274,6 +272,8 @@ router.post('/:id/restore', async (req, res) => {
   try {
     const { id } = req.params;
 
+    console.log(`Restoring user ${id}`);
+
     const result = await pool.query(
       'UPDATE users SET is_active = true, updated_at = NOW() WHERE id = $1 RETURNING id, email, is_active',
       [id]
@@ -283,6 +283,7 @@ router.post('/:id/restore', async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    console.log('User restored:', result.rows[0]);
     res.json({ success: true, message: 'User restored successfully', data: result.rows[0] });
   } catch (error) {
     console.error('Admin user restore error:', error);

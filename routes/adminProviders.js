@@ -37,7 +37,10 @@ router.get('/', async (req, res) => {
               first_name: 'John',
               last_name: 'Safari',
               phone: '+255123456789',
-              is_active: true
+              is_active: true,
+              user_id: 1,
+              total_services: 5,
+              total_revenue: 4500
             },
             {
               id: 2,
@@ -59,7 +62,10 @@ router.get('/', async (req, res) => {
               first_name: 'Jane',
               last_name: 'Mountain',
               phone: '+255987654321',
-              is_active: true
+              is_active: true,
+              user_id: 2,
+              total_services: 3,
+              total_revenue: 2700
             }
           ].slice(0, parseInt(req.query.limit || 20)),
           pagination: {
@@ -109,8 +115,11 @@ router.get('/', async (req, res) => {
         sp.id, sp.business_name, sp.business_type, sp.description,
         sp.location, sp.service_location, sp.country, sp.region,
         sp.district, sp.area, sp.ward, sp.is_verified, sp.rating,
-        sp.total_bookings, sp.created_at, sp.updated_at,
-        u.email, u.first_name, u.last_name, u.phone, u.is_active
+        sp.total_bookings, sp.created_at, sp.updated_at, sp.user_id,
+        sp.badge_type,
+        u.email, u.first_name, u.last_name, u.phone, u.is_active,
+        (SELECT COUNT(*) FROM services WHERE provider_id = sp.id) as total_services,
+        (SELECT COALESCE(SUM(total_amount), 0) FROM bookings WHERE provider_id = sp.id AND payment_status = 'paid') as total_revenue
       FROM service_providers sp
       LEFT JOIN users u ON sp.user_id = u.id
       ${whereClause}
@@ -167,7 +176,8 @@ router.get('/:id', async (req, res) => {
       SELECT 
         sp.*, 
         u.email, u.first_name, u.last_name, u.phone, u.is_active,
-        u.created_at as user_created_at
+        u.created_at as user_created_at,
+        (SELECT COUNT(*) FROM services WHERE provider_id = sp.id) as total_services
       FROM service_providers sp
       LEFT JOIN users u ON sp.user_id = u.id
       WHERE sp.id = $1
