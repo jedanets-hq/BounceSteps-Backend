@@ -199,49 +199,51 @@ try {
   
   // Services routes
   router.get('/services', (req, res) => {
+    const services = [
+      {
+        id: 1,
+        title: 'Serengeti Safari Experience',
+        description: '3-day wildlife safari in Serengeti National Park',
+        category: 'Wildlife Safari',
+        price: 850,
+        duration: '3 days',
+        location: 'Serengeti, Tanzania',
+        status: 'active',
+        created_at: '2026-03-15T09:00:00Z',
+        updated_at: '2026-03-15T09:00:00Z',
+        provider_name: 'Safari Adventures Ltd',
+        provider_id: 1,
+        provider_email: 'info@safariadventures.com'
+      },
+      {
+        id: 2,
+        title: 'Kilimanjaro Base Camp Trek',
+        description: '5-day trekking adventure to Kilimanjaro base camp',
+        category: 'Mountain Trekking',
+        price: 1200,
+        duration: '5 days',
+        location: 'Kilimanjaro, Tanzania',
+        status: 'pending',
+        created_at: '2026-03-14T11:30:00Z',
+        updated_at: '2026-03-14T11:30:00Z',
+        provider_name: 'Mountain Trekking Co',
+        provider_id: 2,
+        provider_email: 'contact@mountaintrek.com'
+      }
+    ].slice(0, parseInt(req.query.limit || 20));
+    
     res.json({
       success: true,
-      data: {
-        services: [
-          {
-            id: 1,
-            title: 'Serengeti Safari Experience',
-            description: '3-day wildlife safari in Serengeti National Park',
-            category: 'Wildlife Safari',
-            price: 850,
-            duration: '3 days',
-            location: 'Serengeti, Tanzania',
-            status: 'active',
-            created_at: '2026-03-15T09:00:00Z',
-            updated_at: '2026-03-15T09:00:00Z',
-            provider_name: 'Safari Adventures Ltd',
-            provider_id: 1,
-            provider_email: 'info@safariadventures.com'
-          },
-          {
-            id: 2,
-            title: 'Kilimanjaro Base Camp Trek',
-            description: '5-day trekking adventure to Kilimanjaro base camp',
-            category: 'Mountain Trekking',
-            price: 1200,
-            duration: '5 days',
-            location: 'Kilimanjaro, Tanzania',
-            status: 'pending',
-            created_at: '2026-03-14T11:30:00Z',
-            updated_at: '2026-03-14T11:30:00Z',
-            provider_name: 'Mountain Trekking Co',
-            provider_id: 2,
-            provider_email: 'contact@mountaintrek.com'
-          }
-        ].slice(0, parseInt(req.query.limit || 20)),
-        pagination: {
-          currentPage: parseInt(req.query.page) || 1,
-          totalPages: 8,
-          totalItems: 156,
-          itemsPerPage: parseInt(req.query.limit) || 20
-        },
-        message: 'Demo data - Admin routes temporarily using fallback data'
-      }
+      data: services,
+      pages: 8,
+      total: 156,
+      pagination: {
+        currentPage: parseInt(req.query.page) || 1,
+        totalPages: 8,
+        totalItems: 156,
+        itemsPerPage: parseInt(req.query.limit) || 20
+      },
+      message: 'Demo data - Admin routes temporarily using fallback data'
     });
   });
   
@@ -360,13 +362,13 @@ try {
         {
           id: 1,
           account_type: 'bank_account',
-          account_holder_name: 'iSafari Global Ltd',
+          account_holder_name: 'BounceSteps Ltd',
           account_number: '****1234',
           bank_name: 'Standard Bank',
           mobile_number: null,
           is_active: true,
           created_at: '2026-03-01T00:00:00Z',
-          email: 'admin@isafari.com',
+          email: 'admin@bouncesteps.com',
           first_name: 'Admin',
           last_name: 'User'
         }

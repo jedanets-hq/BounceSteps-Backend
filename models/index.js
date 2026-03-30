@@ -1,25 +1,4 @@
-const { Pool } = require('pg');
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
-
-// PostgreSQL connection - Use environment variables for production
-const poolConfig = process.env.DATABASE_URL 
-  ? {
-      connectionString: process.env.DATABASE_URL,
-      // Only use SSL in production (when NODE_ENV is production)
-      ssl: process.env.NODE_ENV === 'production' 
-        ? { rejectUnauthorized: false } 
-        : false
-    }
-  : {
-      user: process.env.DB_USER || 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      database: process.env.DB_NAME || 'isafari_db',
-      password: process.env.DB_PASSWORD || 'password',
-      port: process.env.DB_PORT || 5432,
-    };
-
-const pool = new Pool(poolConfig);
+const { pool } = require('../config/postgresql');
 
 // User Model
 const User = {
@@ -162,4 +141,76 @@ const ServiceProvider = {
   }
 };
 
-module.exports = { User, ServiceProvider, pool };
+// Message Model
+const Message = {
+  async getConversations(userId) {
+    // Get unique people the user has messaged with
+    const result = await pool.query(
+      `SELECT DISTINCT ON (other_user_id) 
+        u.id as other_user_id, 
+        u.first_name, 
+        u.last_name, 
+        u.avatar_url,
+        m.message_text as last_message,
+        m.created_at as last_message_time,
+        m.is_read
+      FROM (
+        SELECT 
+          CASE 
+            WHEN traveller_id = $1 THEN provider_id 
+            ELSE traveller_id 
+          END as other_user_id,
+          message_text,
+          created_at,
+          is_read,
+          id
+        FROM messages 
+        WHERE traveller_id = $1 OR provider_id = $1
+      ) m
+      JOIN users u ON u.id = m.other_user_id
+      ORDER BY other_user_id, m.created_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  },
+
+  async getConversation(userId, otherUserId) {
+    const result = await pool.query(
+      `SELECT m.*, u.first_name as sender_name
+       FROM messages m
+       JOIN users u ON u.id = (CASE WHEN m.sender_type = 'traveller' THEN m.traveller_id ELSE m.provider_id END)
+       WHERE (m.traveller_id = $1 AND m.provider_id = $2)
+          OR (m.traveller_id = $2 AND m.provider_id = $1)
+       ORDER BY m.created_at ASC`,
+      [userId, otherUserId]
+    );
+    return result.rows;
+  },
+
+  async create(messageData) {
+    const { traveller_id, provider_id, service_id, sender_type, message_text } = messageData;
+    const result = await pool.query(
+      `INSERT INTO messages (traveller_id, provider_id, service_id, sender_type, message_text)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [traveller_id, provider_id, service_id || null, sender_type, message_text]
+    );
+    return result.rows[0];
+  },
+
+  async getUnreadCount(userId) {
+    const result = await pool.query(
+      `SELECT COUNT(*) FROM messages 
+       WHERE (traveller_id = $1 OR provider_id = $1)
+       AND is_read = false
+       AND (
+         (sender_type = 'provider' AND traveller_id = $1) OR
+         (sender_type = 'traveller' AND provider_id = $1)
+       )`,
+      [userId]
+    );
+    return parseInt(result.rows[0].count);
+  }
+};
+
+module.exports = { User, ServiceProvider, Message, pool };

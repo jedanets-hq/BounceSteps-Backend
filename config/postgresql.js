@@ -21,7 +21,7 @@ const poolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME || 'bouncesteps-db',
       password: process.env.DB_PASSWORD || '@JedaNets01',
       port: process.env.DB_PORT || 5432,
-      ssl: false,
+      ssl: process.env.NODE_ENV === 'production' && !process.env.DB_HOST ? { rejectUnauthorized: false } : false,
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,

@@ -11861,7 +11861,7 @@ const PORT = process.env.PORT || 5000;
   try {
     console.log('Initializing database tables...');
     
-    // Initialize iSafari tables first
+    // Initialize BounceSteps tables first
     const { initializeTables } = require('./migrations/init-tables');
     const { runStartupMigrations } = require('./migrations/run-on-startup');
     

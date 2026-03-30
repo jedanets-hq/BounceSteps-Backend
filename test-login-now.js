@@ -1,7 +1,7 @@
 // Test login on production backend
 const https = require('https');
 
-const API_HOST = 'isafarinetworkglobal-2.onrender.com';
+const API_HOST = 'bouncestepsnetworkglobal-2.onrender.com';
 
 function makeRequest(path, method = 'GET', data = null) {
   return new Promise((resolve, reject) => {

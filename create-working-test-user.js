@@ -1,12 +1,12 @@
 const axios = require('axios');
 
-const API_URL = 'https://isafarinetworkglobal-2.onrender.com/api';
+const API_URL = 'https://bouncestepsnetworkglobal-2.onrender.com/api';
 
 async function createTestUser() {
   console.log('🔧 Creating test user for login testing...\n');
   
   const userData = {
-    email: 'testuser@isafari.com',
+    email: 'testuser@bouncesteps.com',
     password: 'Test123456',
     firstName: 'Test',
     lastName: 'User',

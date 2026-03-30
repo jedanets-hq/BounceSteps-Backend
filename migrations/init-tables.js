@@ -1,5 +1,5 @@
 /**
- * Initialize database tables for iSafari application
+ * Initialize database tables for BounceSteps application
  */
 
 require('dotenv').config();

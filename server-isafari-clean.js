@@ -73,7 +73,7 @@ app.use('/api/auth', authRoutes);
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    service: 'iSafari Global API',
+    service: 'BounceSteps API',
     timestamp: new Date().toISOString()
   });
 });
@@ -81,7 +81,7 @@ app.get('/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'iSafari Global API',
+    message: 'BounceSteps API',
     version: '1.0.0',
     endpoints: {
       auth: '/api/auth',
@@ -111,7 +111,7 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 iSafari Global API running on port ${PORT}`);
+  console.log(`🚀 BounceSteps API running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 CORS enabled for production domains`);
 });

@@ -73,7 +73,7 @@ const authenticateJWT = (req, res, next) => {
       console.warn(`⚠️ [JWT Auth] Suspended user ${user.id} attempted to access ${req.path}`);
       return res.status(403).json({
         success: false,
-        message: 'Your account has been suspended by Admin. Please contact support for assistance at: support@isafari.co.tz',
+        message: 'Your account has been suspended by Admin. Please contact support for assistance at: support@bouncesteps.co.tz',
         code: 'ACCOUNT_SUSPENDED'
       });
     }

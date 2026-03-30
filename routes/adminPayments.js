@@ -252,13 +252,13 @@ router.get('/accounts', async (req, res) => {
           {
             id: 1,
             account_type: 'bank_account',
-            account_holder_name: 'iSafari Global Ltd',
+            account_holder_name: 'BounceSteps Ltd',
             account_number: '****1234',
             bank_name: 'Standard Bank',
             mobile_number: null,
             is_active: true,
             created_at: '2026-03-01T00:00:00Z',
-            email: 'admin@isafari.com',
+            email: 'admin@bouncesteps.com',
             first_name: 'Admin',
             last_name: 'User'
           }

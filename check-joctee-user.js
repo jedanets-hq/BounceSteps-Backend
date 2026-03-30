@@ -7,7 +7,7 @@ const https = require('https');
 async function makeRequest(path, method, data = null) {
   return new Promise((resolve, reject) => {
     const options = {
-      hostname: 'isafarinetworkglobal-2.onrender.com',
+      hostname: 'bouncestepsnetworkglobal-2.onrender.com',
       port: 443,
       path: path,
       method: method,

@@ -3,7 +3,7 @@ const https = require('https');
 function makeRequest(method, path, data) {
   return new Promise((resolve, reject) => {
     const options = {
-      hostname: 'isafarinetworkglobal-2.onrender.com',
+      hostname: 'bouncestepsnetworkglobal-2.onrender.com',
       port: 443,
       path: path,
       method: method,
@@ -96,7 +96,7 @@ async function test() {
   console.log('\n5. Register new test user:');
   try {
     const register = await makeRequest('POST', '/api/auth/register', {
-      email: 'quicktest@isafari.com',
+      email: 'quicktest@bouncesteps.com',
       password: 'Test123456',
       firstName: 'Quick',
       lastName: 'Test',
@@ -110,7 +110,7 @@ async function test() {
       console.log('\n   ✅ Registration successful! Testing login...');
       
       const login = await makeRequest('POST', '/api/auth/login', {
-        email: 'quicktest@isafari.com',
+        email: 'quicktest@bouncesteps.com',
         password: 'Test123456'
       });
       console.log(`   Login Status: ${login.status}`);

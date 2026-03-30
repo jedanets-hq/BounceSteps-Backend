@@ -3,7 +3,7 @@ const https = require('https');
 function makeRequest(method, path, data) {
   return new Promise((resolve, reject) => {
     const options = {
-      hostname: 'isafarinetworkglobal-2.onrender.com',
+      hostname: 'bouncestepsnetworkglobal-2.onrender.com',
       port: 443,
       path: path,
       method: method,
@@ -87,7 +87,7 @@ async function diagnose() {
   const testUsers = [
     { email: 'joctee@gmail.com', password: '123456', name: 'Joctee (known to exist)' },
     { email: 'test@example.com', password: '123456', name: 'Test User' },
-    { email: 'admin@isafari.com', password: 'admin123', name: 'Admin' }
+    { email: 'admin@bouncesteps.com', password: 'admin123', name: 'Admin' }
   ];
   
   for (const user of testUsers) {
@@ -130,7 +130,7 @@ async function diagnose() {
   console.log('─'.repeat(60));
   
   const newUser = {
-    email: `test${Date.now()}@isafari.com`,
+    email: `test${Date.now()}@bouncesteps.com`,
     password: 'Test123456',
     firstName: 'Test',
     lastName: 'User',

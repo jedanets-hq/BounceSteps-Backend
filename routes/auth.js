@@ -11,10 +11,10 @@ const router = express.Router();
 // Generate JWT token
 const generateToken = (user) => {
   return jwt.sign(
-    { 
-      id: user.id, 
-      email: user.email, 
-      userType: user.user_type 
+    {
+      id: user.id,
+      email: user.email,
+      userType: user.user_type
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -24,9 +24,9 @@ const generateToken = (user) => {
 // Register endpoint - PostgreSQL version
 router.post('/register', getValidationMiddleware('register'), async (req, res) => {
   try {
-    const { 
+    const {
       email, password, firstName, lastName, userType, phone, googleId,
-      serviceLocation, serviceCategories, locationData, companyName, businessType, description
+      serviceLocation, serviceCategories, locationData, companyName, businessName, businessType, description
     } = req.body;
 
     console.log('📝 Registration attempt for:', email, 'userType:', userType);
@@ -73,19 +73,19 @@ router.post('/register', getValidationMiddleware('register'), async (req, res) =
 
     // Create service provider profile if user is a service provider
     if (userType === 'service_provider') {
-      const businessName = companyName || `${firstName} ${lastName}'s Business`;
-      
+      const finalBusinessName = businessName || companyName || `${firstName} ${lastName}'s Business`;
+
       // Ensure location data exists
       const providerLocationData = locationData || {};
-      const serviceLocationString = serviceLocation || 
+      const serviceLocationString = serviceLocation ||
         `${providerLocationData.street || ''}, ${providerLocationData.ward || ''}, ${providerLocationData.district || ''}, ${providerLocationData.region || ''}, Tanzania`
-        .replace(/^, |, , /g, ', ').replace(/^, /, '').trim();
-      
+          .replace(/^, |, , /g, ', ').replace(/^, /, '').trim();
+
       await ServiceProvider.create({
         user_id: newUser.id,
-        business_name: businessName,
+        business_name: finalBusinessName,
         business_type: businessType || 'General Services',
-        description: description || `Professional services provided by ${businessName}`,
+        description: description || `Professional services provided by ${finalBusinessName}`,
         location: serviceLocationString,
         service_location: serviceLocationString,
         country: providerLocationData.country || 'Tanzania',
@@ -138,7 +138,7 @@ router.post('/register', getValidationMiddleware('register'), async (req, res) =
       code: error.code,
       stack: process.env.NODE_ENV === 'development' ? error.stack : 'hidden in production'
     });
-    
+
     // Handle PostgreSQL unique constraint violation
     if (error.code === '23505') {
       return res.status(400).json({
@@ -204,7 +204,7 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
     if (!user.is_active) {
       return res.status(403).json({
         success: false,
-        message: 'Your account has been suspended by Admin. Please contact support for assistance at: support@isafari.co.tz',
+        message: 'Your account has been suspended by Admin. Please contact support for assistance at: support@bouncesteps.co.tz',
         field: 'account',
         code: 'ACCOUNT_SUSPENDED'
       });
@@ -222,7 +222,7 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     console.log('🔑 Password validation result:', isPasswordValid);
-    
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -248,7 +248,7 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
             locationData = {};
           }
         }
-        
+
         // Get provider badge from provider_badges table
         const { pool } = require('../models');
         const badgeResult = await pool.query(
@@ -256,7 +256,7 @@ router.post('/login', getValidationMiddleware('login'), async (req, res) => {
           [provider.id]
         );
         const badge = badgeResult.rows[0];
-        
+
         providerData = {
           companyName: provider.business_name || '',
           businessName: provider.business_name || '',
@@ -322,7 +322,7 @@ router.get('/google', (req, res, next) => {
     sameSite: 'lax',
     path: '/'
   });
-  passport.authenticate('google', { 
+  passport.authenticate('google', {
     scope: ['profile', 'email'],
     prompt: 'select_account',
     state: 'login'
@@ -339,7 +339,7 @@ router.get('/google/register', (req, res, next) => {
     sameSite: 'lax',
     path: '/'
   });
-  passport.authenticate('google', { 
+  passport.authenticate('google', {
     scope: ['profile', 'email'],
     prompt: 'select_account',
     state: 'register'
@@ -354,64 +354,64 @@ router.get('/google/callback', (req, res, next) => {
   const flowType = cookieFlowType || stateFlowType || 'login';
   console.log('🔄 Google OAuth callback - flow type:', flowType, '(cookie:', cookieFlowType, ', state:', stateFlowType, ')');
   console.log('🌐 FRONTEND_URL:', process.env.FRONTEND_URL);
-  
+
   // Store flow type on request for passport strategy to use
   req.googleFlowType = flowType;
-  
+
   // Clear the flow tracking cookie
   res.clearCookie('google_auth_flow', { path: '/' });
-  
+
   const frontendUrl = process.env.FRONTEND_URL || 'https://bouncesteps.com';
   passport.authenticate('google', { session: false, failureRedirect: `${frontendUrl}/login?error=google_auth_failed` })(req, res, next);
 }, async (req, res) => {
-    try {
-      // CRITICAL: Use production frontend URL
-      const frontendUrl = process.env.FRONTEND_URL || 'https://isafari-tz.netlify.app';
-      const flowType = req.googleFlowType || 'login';
-      
-      console.log('📍 Redirecting to frontend:', frontendUrl);
-      
-      // Check if user is NOT registered and tried to LOGIN
-      if (req.user.notRegistered) {
-        console.log('❌ User not registered, redirecting to login with error:', req.user.email);
-        const redirectUrl = `${frontendUrl}/login?error=not_registered&email=${encodeURIComponent(req.user.email)}`;
-        console.log('🔗 Redirect URL:', redirectUrl);
-        return res.redirect(redirectUrl);
-      }
-      
-      // Check if user needs to complete registration (new Google user in REGISTRATION flow)
-      if (req.user.needsRegistration) {
-        // Create Google data object
-        const googleDataObj = {
-          googleId: req.user.googleId,
-          email: req.user.email,
-          firstName: req.user.firstName,
-          lastName: req.user.lastName,
-          avatarUrl: req.user.avatarUrl
-        };
-        
-        // Use URL-safe Base64 encoding for safer URL transmission
-        // CRITICAL: Use base64url to avoid +/= corruption in URL query strings
-        const googleDataBase64 = Buffer.from(JSON.stringify(googleDataObj)).toString('base64url');
-        
-        console.log('🔄 New Google user in registration flow, redirecting to complete registration');
-        console.log('📧 Email:', req.user.email);
-        console.log('🔗 GoogleData base64url length:', googleDataBase64.length);
-        
-        // Redirect to role selection with Google data (encodeURIComponent for extra safety)
-        return res.redirect(`${frontendUrl}/google-role-selection?googleData=${encodeURIComponent(googleDataBase64)}`);
-      }
-      
-      // Existing user - generate token and redirect
-      const token = generateToken(req.user);
-      console.log('✅ Existing Google user logged in:', req.user.email);
-      res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
-    } catch (error) {
-      console.error('❌ Google OAuth callback error:', error);
-      const frontendUrl = process.env.FRONTEND_URL || 'https://isafari-tz.netlify.app';
-      res.redirect(`${frontendUrl}/login?error=auth_failed`);
+  try {
+    // CRITICAL: Use production frontend URL
+    const frontendUrl = process.env.FRONTEND_URL || 'https://bouncesteps-tz.netlify.app';
+    const flowType = req.googleFlowType || 'login';
+
+    console.log('📍 Redirecting to frontend:', frontendUrl);
+
+    // Check if user is NOT registered and tried to LOGIN
+    if (req.user.notRegistered) {
+      console.log('❌ User not registered, redirecting to login with error:', req.user.email);
+      const redirectUrl = `${frontendUrl}/login?error=not_registered&email=${encodeURIComponent(req.user.email)}`;
+      console.log('🔗 Redirect URL:', redirectUrl);
+      return res.redirect(redirectUrl);
     }
+
+    // Check if user needs to complete registration (new Google user in REGISTRATION flow)
+    if (req.user.needsRegistration) {
+      // Create Google data object
+      const googleDataObj = {
+        googleId: req.user.googleId,
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        avatarUrl: req.user.avatarUrl
+      };
+
+      // Use URL-safe Base64 encoding for safer URL transmission
+      // CRITICAL: Use base64url to avoid +/= corruption in URL query strings
+      const googleDataBase64 = Buffer.from(JSON.stringify(googleDataObj)).toString('base64url');
+
+      console.log('🔄 New Google user in registration flow, redirecting to complete registration');
+      console.log('📧 Email:', req.user.email);
+      console.log('🔗 GoogleData base64url length:', googleDataBase64.length);
+
+      // Redirect to role selection with Google data (encodeURIComponent for extra safety)
+      return res.redirect(`${frontendUrl}/google-role-selection?googleData=${encodeURIComponent(googleDataBase64)}`);
+    }
+
+    // Existing user - generate token and redirect
+    const token = generateToken(req.user);
+    console.log('✅ Existing Google user logged in:', req.user.email);
+    res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+  } catch (error) {
+    console.error('❌ Google OAuth callback error:', error);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://bouncesteps-tz.netlify.app';
+    res.redirect(`${frontendUrl}/login?error=auth_failed`);
   }
+}
 );
 
 // Get current user
@@ -451,17 +451,17 @@ router.get('/me', passport.authenticate('jwt', { session: false }), async (req, 
 router.get('/google/status', (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  
-  const isConfigured = clientId && 
-                       clientSecret && 
-                       clientId !== 'your-google-client-id-from-console-cloud-google' &&
-                       clientSecret !== 'your-google-client-secret-from-console-cloud-google';
-  
+
+  const isConfigured = clientId &&
+    clientSecret &&
+    clientId !== 'your-google-client-id-from-console-cloud-google' &&
+    clientSecret !== 'your-google-client-secret-from-console-cloud-google';
+
   res.json({
     success: true,
     configured: isConfigured,
-    message: isConfigured 
-      ? 'Google OAuth is configured and ready to use' 
+    message: isConfigured
+      ? 'Google OAuth is configured and ready to use'
       : 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend/.env'
   });
 });
@@ -469,10 +469,10 @@ router.get('/google/status', (req, res) => {
 // Complete Google Registration - For new Google users who need to select user type
 router.post('/google/complete-registration', async (req, res) => {
   try {
-    const { 
+    const {
       googleId, email, firstName, lastName, avatarUrl, userType,
-      phone, serviceLocation, serviceCategories, locationData, 
-      companyName, businessType, description 
+      phone, serviceLocation, serviceCategories, locationData,
+      companyName, businessType, description
     } = req.body;
 
     console.log('📝 Google registration completion for:', email, 'userType:', userType);
@@ -493,7 +493,7 @@ router.post('/google/complete-registration', async (req, res) => {
         message: 'Invalid account type selected. Must be "traveler" or "service_provider"'
       });
     }
-    
+
     // Validate traveler-specific fields
     if (userType === 'traveler') {
       if (!firstName || !firstName.trim()) {
@@ -511,7 +511,7 @@ router.post('/google/complete-registration', async (req, res) => {
         });
       }
     }
-    
+
     // Validate service provider-specific fields
     if (userType === 'service_provider') {
       if (!companyName || !companyName.trim()) {
@@ -566,12 +566,12 @@ router.post('/google/complete-registration', async (req, res) => {
     if (existingUser) {
       // Link Google account to existing user - update auth_provider to 'both' if they have password
       const newAuthProvider = existingUser.password ? 'both' : 'google';
-      await User.update(existingUser.id, { 
-        google_id: googleId, 
+      await User.update(existingUser.id, {
+        google_id: googleId,
         avatar_url: avatarUrl || existingUser.avatar_url,
         auth_provider: newAuthProvider
       });
-      
+
       const token = generateToken(existingUser);
       console.log('✅ Google account linked to existing user:', existingUser.email, 'auth_provider:', newAuthProvider);
       return res.json({
@@ -611,12 +611,12 @@ router.post('/google/complete-registration', async (req, res) => {
     // Create service provider profile if user is a service provider
     if (userType === 'service_provider') {
       const businessName = companyName || `${firstName} ${lastName}'s Business`;
-      
+
       const providerLocationData = locationData || {};
-      const serviceLocationString = serviceLocation || 
+      const serviceLocationString = serviceLocation ||
         `${providerLocationData.street || ''}, ${providerLocationData.ward || ''}, ${providerLocationData.district || ''}, ${providerLocationData.region || ''}, Tanzania`
-        .replace(/^, |, , /g, ', ').replace(/^, /, '').trim();
-      
+          .replace(/^, |, , /g, ', ').replace(/^, /, '').trim();
+
       await ServiceProvider.create({
         user_id: newUser.id,
         business_name: businessName,
@@ -671,7 +671,7 @@ router.post('/google/complete-registration', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Google registration completion error:', error);
-    
+
     if (error.code === '23505') {
       return res.status(400).json({
         success: false,
@@ -702,7 +702,7 @@ router.post('/forgot-password', async (req, res) => {
 
     // Find user by email
     const user = await User.findByEmail(email.toLowerCase().trim());
-    
+
     // Always return success for security (don't reveal if email exists)
     if (user) {
       // Generate reset token
@@ -711,7 +711,7 @@ router.post('/forgot-password', async (req, res) => {
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
       );
-      
+
       console.log(`Password reset requested for: ${email}`);
       // TODO: Implement email sending
     }

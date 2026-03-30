@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const API_URL = 'https://isafarinetworkglobal-2.onrender.com/api';
+const API_URL = 'https://bouncestepsnetworkglobal-2.onrender.com/api';
 
 async function testLogin() {
   console.log('🔍 Testing login with detailed error logging...\n');

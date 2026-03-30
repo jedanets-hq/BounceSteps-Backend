@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 
 // Use Render's DATABASE_URL
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://isafarimasterorg_user:IuNv7yEfLRiDQL96cgmsxr2751MiBjsq@dpg-d5nhs5t6ubrc73asfksg-a.frankfurt-postgres.render.com/isafarimasterorg';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://bouncestepsmasterorg_user:IuNv7yEfLRiDQL96cgmsxr2751MiBjsq@dpg-d5nhs5t6ubrc73asfksg-a.frankfurt-postgres.render.com/bouncestepsmasterorg';
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
