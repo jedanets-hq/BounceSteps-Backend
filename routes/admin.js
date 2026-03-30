@@ -269,12 +269,12 @@ try {
   router.get('/services/categories', (req, res) => {
     res.json({
       success: true,
-      data: [
-        { category: 'Wildlife Safari', service_count: 45, avg_price: 750 },
-        { category: 'Mountain Trekking', service_count: 32, avg_price: 950 },
-        { category: 'Cultural Tours', service_count: 28, avg_price: 450 },
-        { category: 'Beach Activities', service_count: 25, avg_price: 350 },
-        { category: 'Adventure Sports', service_count: 26, avg_price: 650 }
+      categories: [
+        { category: 'Wildlife Safari', count: 45 },
+        { category: 'Mountain Trekking', count: 32 },
+        { category: 'Cultural Tours', count: 28 },
+        { category: 'Beach Activities', count: 25 },
+        { category: 'Adventure Sports', count: 26 }
       ],
       message: 'Demo data - Admin routes temporarily using fallback data'
     });
