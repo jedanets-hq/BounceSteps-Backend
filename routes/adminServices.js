@@ -205,12 +205,12 @@ router.get('/categories', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        data: [
-          { category: 'Wildlife Safari', service_count: 45, avg_price: 750 },
-          { category: 'Mountain Trekking', service_count: 32, avg_price: 950 },
-          { category: 'Cultural Tours', service_count: 28, avg_price: 450 },
-          { category: 'Beach Activities', service_count: 25, avg_price: 350 },
-          { category: 'Adventure Sports', service_count: 26, avg_price: 650 }
+        categories: [
+          { category: 'Wildlife Safari', count: 45 },
+          { category: 'Mountain Trekking', count: 32 },
+          { category: 'Cultural Tours', count: 28 },
+          { category: 'Beach Activities', count: 25 },
+          { category: 'Adventure Sports', count: 26 }
         ],
         message: 'Demo data - Connect database for live categories'
       });
@@ -219,17 +219,16 @@ router.get('/categories', async (req, res) => {
     const result = await pool.query(`
       SELECT 
         category,
-        COUNT(*) as service_count,
-        AVG(price) as avg_price
+        COUNT(*) as count
       FROM services 
       WHERE category IS NOT NULL 
       GROUP BY category 
-      ORDER BY service_count DESC
+      ORDER BY count DESC
     `);
 
     res.json({
       success: true,
-      data: result.rows
+      categories: result.rows
     });
   } catch (error) {
     console.error('Admin service categories error:', error);
