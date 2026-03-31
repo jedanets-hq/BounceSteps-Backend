@@ -7,21 +7,20 @@ const poolConfig = process.env.DATABASE_URL
       ssl: process.env.NODE_ENV === 'production' 
         ? { rejectUnauthorized: false } 
         : false,
-      // Ensure no Unix socket usage
-      host: process.env.DB_HOST || '34.42.58.123',
-      port: process.env.DB_PORT || 5432,
-      // Connection pool settings for Cloud Run
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     }
   : {
       user: process.env.DB_USER || 'postgres',
-      host: process.env.DB_HOST || '34.42.58.123',
+      host: process.env.DB_HOST || '127.0.0.1',
       database: process.env.DB_NAME || 'bouncesteps-db',
-      password: process.env.DB_PASSWORD || '@JedaNets01',
+      password: process.env.DB_PASSWORD || '@Jctnftr01',
       port: process.env.DB_PORT || 5432,
-      ssl: process.env.NODE_ENV === 'production' && !process.env.DB_HOST ? { rejectUnauthorized: false } : false,
+      // For Cloud SQL Unix socket connection
+      ...(process.env.DB_HOST && process.env.DB_HOST.startsWith('/cloudsql/') 
+        ? { host: process.env.DB_HOST } 
+        : {}),
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
@@ -32,9 +31,16 @@ const pool = new Pool(poolConfig);
 // Test database connection
 pool.connect((err, client, release) => {
   if (err) {
-    console.error('❌ Error connecting to PostgreSQL database:', err);
+    console.error('❌ Error connecting to PostgreSQL database:', err.message);
+    console.error('Connection config:', {
+      user: poolConfig.user,
+      host: poolConfig.host,
+      database: poolConfig.database,
+      port: poolConfig.port
+    });
   } else {
     console.log('✅ Connected to PostgreSQL database');
+    console.log('📊 Database:', poolConfig.database);
     release();
   }
 });
