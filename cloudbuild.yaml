@@ -48,8 +48,3 @@ options:
 
 # Timeout for the entire build
 timeout: '1200s'
-
-# Substitutions (can be overridden)
-substitutions:
-  _REGION: 'us-central1'
-  _SERVICE_NAME: 'bouncesteps-backend'
