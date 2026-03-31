@@ -2,12 +2,42 @@ const express = require('express');
 const router = express.Router();
 
 // Test endpoint to verify admin routes are working
-router.get('/test', (req, res) => {
+router.get('/test', async (req, res) => {
   res.json({ 
     success: true, 
     message: 'Admin routes are working',
     timestamp: new Date().toISOString()
   });
+});
+
+// Database connection test endpoint
+router.get('/test-db', async (req, res) => {
+  try {
+    if (!pool) {
+      return res.json({
+        success: false,
+        message: 'Database pool not available',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Test database connection
+    const result = await pool.query('SELECT NOW() as current_time, version() as db_version');
+    
+    res.json({
+      success: true,
+      message: 'Database connection successful',
+      data: result.rows[0],
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      message: 'Database connection failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Database connection for existing endpoints
@@ -19,7 +49,7 @@ try {
 }
 
 // Import individual admin route modules with error handling
-let adminAuthRoutes, adminUsersRoutes, adminProvidersRoutes, adminPaymentsRoutes, adminDashboardRoutes, adminServicesRoutes;
+let adminAuthRoutes, adminUsersRoutes, adminProvidersRoutes, adminPaymentsRoutes, adminDashboardRoutes, adminServicesRoutes, adminTravelerStoriesRoutes;
 
 try {
   adminAuthRoutes = require('./adminAuth');
@@ -28,6 +58,7 @@ try {
   adminPaymentsRoutes = require('./adminPayments');
   adminDashboardRoutes = require('./adminDashboard');
   adminServicesRoutes = require('./adminServices');
+  adminTravelerStoriesRoutes = require('./adminTravelerStories');
 
   // Mount individual admin route modules
   router.use('/auth', adminAuthRoutes);
@@ -36,10 +67,13 @@ try {
   router.use('/payments', adminPaymentsRoutes);
   router.use('/dashboard', adminDashboardRoutes);
   router.use('/services', adminServicesRoutes);
+  router.use('/traveler-stories', adminTravelerStoriesRoutes);
   
   console.log('✅ All admin routes loaded successfully');
 } catch (error) {
   console.error('❌ Error loading admin routes:', error.message);
+  console.error('⚠️ Some admin routes may not be available. Please check the individual route files.');
+}
   
   // Create comprehensive fallback routes with demo data
   
@@ -374,6 +408,94 @@ try {
         }
       ],
       message: 'Demo data - Admin routes temporarily using fallback data'
+    });
+  });
+  
+  // Traveler Stories routes
+  router.get('/traveler-stories/all', (req, res) => {
+    const { status } = req.query;
+    let stories = [
+      {
+        id: 1,
+        title: 'Amazing Safari Experience',
+        content: 'I had the most incredible time exploring the Serengeti. The wildlife was breathtaking!',
+        location: 'Serengeti, Tanzania',
+        trip_date: '2026-03-15',
+        status: 'pending',
+        likes_count: 0,
+        created_at: '2026-03-20T10:00:00Z',
+        updated_at: '2026-03-20T10:00:00Z',
+        user_id: 1,
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john.doe@example.com',
+        profile_image: null
+      },
+      {
+        id: 2,
+        title: 'Kilimanjaro Summit Success',
+        content: 'After 5 days of trekking, we made it to the summit! The view was worth every step.',
+        location: 'Kilimanjaro, Tanzania',
+        trip_date: '2026-03-10',
+        status: 'approved',
+        likes_count: 15,
+        created_at: '2026-03-18T14:30:00Z',
+        updated_at: '2026-03-19T09:00:00Z',
+        user_id: 2,
+        first_name: 'Jane',
+        last_name: 'Smith',
+        email: 'jane.smith@example.com',
+        profile_image: null
+      },
+      {
+        id: 3,
+        title: 'Zanzibar Beach Paradise',
+        content: 'The beaches in Zanzibar are absolutely stunning. Crystal clear water and white sand!',
+        location: 'Zanzibar, Tanzania',
+        trip_date: '2026-03-12',
+        status: 'approved',
+        likes_count: 22,
+        created_at: '2026-03-17T11:20:00Z',
+        updated_at: '2026-03-18T08:15:00Z',
+        user_id: 3,
+        first_name: 'Mike',
+        last_name: 'Johnson',
+        email: 'mike.j@example.com',
+        profile_image: null
+      }
+    ];
+    
+    if (status && ['pending', 'approved', 'rejected'].includes(status)) {
+      stories = stories.filter(s => s.status === status);
+    }
+    
+    res.json({
+      success: true,
+      stories: stories,
+      message: 'Demo data - Admin routes temporarily using fallback data'
+    });
+  });
+  
+  router.put('/traveler-stories/:id/approve', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Story approved successfully',
+      story: { id: req.params.id, status: 'approved' }
+    });
+  });
+  
+  router.put('/traveler-stories/:id/reject', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Story rejected',
+      story: { id: req.params.id, status: 'rejected' }
+    });
+  });
+  
+  router.delete('/traveler-stories/admin/:id', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Story deleted successfully'
     });
   });
 }

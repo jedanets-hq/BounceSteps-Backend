@@ -119,7 +119,7 @@ router.get('/', async (req, res) => {
         sp.badge_type,
         u.email, u.first_name, u.last_name, u.phone, u.is_active,
         (SELECT COUNT(*) FROM services WHERE provider_id = sp.id) as total_services,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM bookings WHERE provider_id = sp.id AND payment_status = 'paid') as total_revenue
+        (SELECT COALESCE(SUM(total_amount), 0) FROM bookings WHERE provider_id = sp.id AND status = 'confirmed') as total_revenue
       FROM service_providers sp
       LEFT JOIN users u ON sp.user_id = u.id
       ${whereClause}

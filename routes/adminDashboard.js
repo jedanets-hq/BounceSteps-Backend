@@ -16,23 +16,14 @@ router.get('/stats', async (req, res) => {
       return res.json({
         success: true,
         data: {
-          users: 1250,
-          providers: 85,
-          bookings: 342,
-          services: 156,
-          revenue: 45780.50,
-          period: req.query.period || '30days',
-          growth: {
-            userGrowth: [
-              { date: '2026-03-25', new_users: 12 },
-              { date: '2026-03-24', new_users: 8 },
-              { date: '2026-03-23', new_users: 15 },
-              { date: '2026-03-22', new_users: 10 },
-              { date: '2026-03-21', new_users: 18 }
-            ]
-          },
-          message: 'Demo data - Connect database for live statistics'
-        }
+          users: { total: 0, growth: 0 },
+          providers: { total: 0, verified: 0, growth: 0 },
+          bookings: { total: 0, completed: 0, growth: 0 },
+          services: { total: 0, active: 0, growth: 0 },
+          revenue: 0,
+          period: req.query.period || '30days'
+        },
+        message: 'No database connection - Please check database configuration'
       });
     }
 
@@ -40,67 +31,90 @@ router.get('/stats', async (req, res) => {
     
     // Calculate date range based on period
     let dateFilter = '';
-    if (period === '7days') {
+    let previousDateFilter = '';
+    
+    if (period === 'today') {
+      dateFilter = "AND created_at >= CURRENT_DATE";
+      previousDateFilter = "AND created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE";
+    } else if (period === '7days') {
       dateFilter = "AND created_at >= NOW() - INTERVAL '7 days'";
+      previousDateFilter = "AND created_at >= NOW() - INTERVAL '14 days' AND created_at < NOW() - INTERVAL '7 days'";
     } else if (period === '30days') {
       dateFilter = "AND created_at >= NOW() - INTERVAL '30 days'";
+      previousDateFilter = "AND created_at >= NOW() - INTERVAL '60 days' AND created_at < NOW() - INTERVAL '30 days'";
     } else if (period === '90days') {
       dateFilter = "AND created_at >= NOW() - INTERVAL '90 days'";
+      previousDateFilter = "AND created_at >= NOW() - INTERVAL '180 days' AND created_at < NOW() - INTERVAL '90 days'";
+    } else {
+      // All time - no date filter
+      dateFilter = '';
+      previousDateFilter = '';
     }
 
-    // Get basic stats with error handling for missing tables
-    const queries = [
-      { name: 'users', query: `SELECT COUNT(*) as count FROM users WHERE 1=1 ${dateFilter}` },
-      { name: 'providers', query: `SELECT COUNT(*) as count FROM service_providers WHERE 1=1 ${dateFilter}` },
-      { name: 'bookings', query: `SELECT COUNT(*) as count FROM bookings WHERE 1=1 ${dateFilter}` },
-      { name: 'services', query: `SELECT COUNT(*) as count FROM services WHERE 1=1 ${dateFilter}` },
+    // Get comprehensive stats with growth calculations
+    const statsQueries = [
+      // Current period stats
+      { name: 'users_current', query: `SELECT COUNT(*) as count FROM users WHERE 1=1 ${dateFilter}` },
+      { name: 'providers_current', query: `SELECT COUNT(*) as count FROM service_providers WHERE 1=1 ${dateFilter}` },
+      { name: 'providers_verified', query: `SELECT COUNT(*) as count FROM service_providers WHERE is_verified = true ${dateFilter}` },
+      { name: 'bookings_current', query: `SELECT COUNT(*) as count FROM bookings WHERE 1=1 ${dateFilter}` },
+      { name: 'bookings_completed', query: `SELECT COUNT(*) as count FROM bookings WHERE status IN ('completed', 'confirmed') ${dateFilter}` },
+      { name: 'services_current', query: `SELECT COUNT(*) as count FROM services WHERE 1=1 ${dateFilter}` },
+      { name: 'services_active', query: `SELECT COUNT(*) as count FROM services WHERE status = 'active' ${dateFilter}` },
       { name: 'revenue', query: `SELECT COALESCE(SUM(amount), 0) as total FROM promotion_payments WHERE status = 'completed' ${dateFilter}` }
     ];
 
+    // Previous period stats for growth calculation (only if not all time)
+    if (previousDateFilter) {
+      statsQueries.push(
+        { name: 'users_previous', query: `SELECT COUNT(*) as count FROM users WHERE 1=1 ${previousDateFilter}` },
+        { name: 'providers_previous', query: `SELECT COUNT(*) as count FROM service_providers WHERE 1=1 ${previousDateFilter}` },
+        { name: 'bookings_previous', query: `SELECT COUNT(*) as count FROM bookings WHERE 1=1 ${previousDateFilter}` }
+      );
+    }
+
     const results = {};
     
-    for (const { name, query } of queries) {
+    for (const { name, query } of statsQueries) {
       try {
         const result = await pool.query(query);
         results[name] = name === 'revenue' 
           ? parseFloat(result.rows[0].total) || 0
           : parseInt(result.rows[0].count) || 0;
       } catch (error) {
-        console.warn(`Table might not exist for ${name}:`, error.message);
+        console.warn(`Query failed for ${name}:`, error.message);
         results[name] = 0;
       }
     }
 
-    // Get growth data for the period
-    let growthData = {};
-    try {
-      const growthQuery = `
-        SELECT 
-          DATE_TRUNC('day', created_at) as date,
-          COUNT(*) as new_users
-        FROM users 
-        WHERE created_at >= NOW() - INTERVAL '${period === '7days' ? '7' : period === '30days' ? '30' : '90'} days'
-        GROUP BY DATE_TRUNC('day', created_at)
-        ORDER BY date DESC
-        LIMIT 10
-      `;
-      const growthResult = await pool.query(growthQuery);
-      growthData = {
-        userGrowth: growthResult.rows
-      };
-    } catch (error) {
-      console.warn('Growth data query failed:', error.message);
-      growthData = { userGrowth: [] };
-    }
+    // Calculate growth percentages
+    const calculateGrowth = (current, previous) => {
+      if (!previous || previous === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 100);
+    };
 
     const stats = {
-      users: results.users,
-      providers: results.providers,
-      bookings: results.bookings,
-      services: results.services,
-      revenue: results.revenue,
-      period,
-      growth: growthData
+      users: {
+        total: results.users_current || 0,
+        growth: previousDateFilter ? calculateGrowth(results.users_current, results.users_previous) : 0
+      },
+      providers: {
+        total: results.providers_current || 0,
+        verified: results.providers_verified || 0,
+        growth: previousDateFilter ? calculateGrowth(results.providers_current, results.providers_previous) : 0
+      },
+      bookings: {
+        total: results.bookings_current || 0,
+        completed: results.bookings_completed || 0,
+        growth: previousDateFilter ? calculateGrowth(results.bookings_current, results.bookings_previous) : 0
+      },
+      services: {
+        total: results.services_current || 0,
+        active: results.services_active || 0,
+        growth: 0 // Services don't have historical comparison yet
+      },
+      revenue: results.revenue || 0,
+      period
     };
 
     res.json({ success: true, data: stats });
@@ -120,52 +134,29 @@ router.get('/activity', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        data: [
-          {
-            type: 'user_registration',
-            description: 'New user registered: John Doe',
-            timestamp: '2026-03-25T10:30:00Z',
-            details: { email: 'john.doe@example.com' }
-          },
-          {
-            type: 'booking_created',
-            description: 'New booking for Safari Tour',
-            timestamp: '2026-03-25T09:15:00Z',
-            details: { booking_date: '2026-04-01', amount: 450 }
-          },
-          {
-            type: 'provider_registration',
-            description: 'New provider: Safari Adventures Ltd',
-            timestamp: '2026-03-25T08:45:00Z',
-            details: { business_type: 'Tour Operator' }
-          }
-        ].slice(0, parseInt(req.query.limit || 10)),
-        message: 'Demo data - Connect database for live activity'
+        data: [],
+        message: 'No database connection - Please check database configuration'
       });
     }
 
     const { limit = 10 } = req.query;
-
     const activities = [];
 
     // Get recent user registrations
     try {
       const usersQuery = `
         SELECT 
-          'user_registration' as type,
-          first_name || ' ' || last_name as description,
+          'user_registered' as type,
+          CONCAT(first_name, ' ', last_name) as name,
           email,
-          created_at as timestamp
+          user_type,
+          created_at
         FROM users 
         ORDER BY created_at DESC 
         LIMIT $1
       `;
-      const usersResult = await pool.query(usersQuery, [Math.floor(limit / 2)]);
-      activities.push(...usersResult.rows.map(row => ({
-        ...row,
-        description: `New user registered: ${row.description}`,
-        details: { email: row.email }
-      })));
+      const usersResult = await pool.query(usersQuery, [Math.floor(limit / 3)]);
+      activities.push(...usersResult.rows);
     } catch (error) {
       console.warn('Users activity query failed:', error.message);
     }
@@ -175,22 +166,17 @@ router.get('/activity', async (req, res) => {
       const bookingsQuery = `
         SELECT 
           'booking_created' as type,
-          'New booking for ' || service_type as description,
-          booking_date,
-          created_at as timestamp,
-          total_amount
-        FROM bookings 
-        ORDER BY created_at DESC 
+          CONCAT(u.first_name, ' ', u.last_name) as name,
+          u.email,
+          'booking' as user_type,
+          b.created_at
+        FROM bookings b
+        JOIN users u ON b.user_id = u.id
+        ORDER BY b.created_at DESC 
         LIMIT $1
       `;
-      const bookingsResult = await pool.query(bookingsQuery, [Math.floor(limit / 2)]);
-      activities.push(...bookingsResult.rows.map(row => ({
-        ...row,
-        details: { 
-          booking_date: row.booking_date,
-          amount: row.total_amount 
-        }
-      })));
+      const bookingsResult = await pool.query(bookingsQuery, [Math.floor(limit / 3)]);
+      activities.push(...bookingsResult.rows);
     } catch (error) {
       console.warn('Bookings activity query failed:', error.message);
     }
@@ -200,25 +186,24 @@ router.get('/activity', async (req, res) => {
       const providersQuery = `
         SELECT 
           'provider_registration' as type,
-          'New provider: ' || business_name as description,
-          business_type,
-          created_at as timestamp
-        FROM service_providers 
-        ORDER BY created_at DESC 
+          sp.business_name as name,
+          u.email,
+          'service_provider' as user_type,
+          sp.created_at
+        FROM service_providers sp
+        JOIN users u ON sp.user_id = u.id
+        ORDER BY sp.created_at DESC 
         LIMIT $1
       `;
       const providersResult = await pool.query(providersQuery, [Math.floor(limit / 3)]);
-      activities.push(...providersResult.rows.map(row => ({
-        ...row,
-        details: { business_type: row.business_type }
-      })));
+      activities.push(...providersResult.rows);
     } catch (error) {
       console.warn('Providers activity query failed:', error.message);
     }
 
     // Sort all activities by timestamp and limit
     const sortedActivities = activities
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, parseInt(limit));
 
     res.json({ 

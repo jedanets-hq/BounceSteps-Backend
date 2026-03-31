@@ -96,7 +96,7 @@ router.post('/', authenticateJWT, async (req, res) => {
 });
 
 // Get pending stories (admin only - no auth for local development)
-router.get('/admin/pending', async (req, res) => {
+router.get('/pending', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
@@ -126,7 +126,7 @@ router.get('/admin/pending', async (req, res) => {
 });
 
 // Get all stories with status (admin only - no auth for local development)
-router.get('/admin/all', async (req, res) => {
+router.get('/all', async (req, res) => {
   try {
     const { status } = req.query;
     

@@ -535,6 +535,73 @@ async function runStartupMigrations() {
       console.log('✅ Messages table already exists');
     }
     
+    // Migration 11: Add admin portal columns to services table
+    console.log('\n📋 Adding admin portal columns to services table...');
+    
+    const adminColumns = [
+      { name: 'is_featured', type: 'BOOLEAN DEFAULT false' },
+      { name: 'is_trending', type: 'BOOLEAN DEFAULT false' },
+      { name: 'images', type: 'TEXT[] DEFAULT \'{}\'::TEXT[]' },
+      { name: 'search_priority', type: 'INTEGER DEFAULT 0' },
+      { name: 'category_priority', type: 'INTEGER DEFAULT 0' },
+      { name: 'is_enhanced_listing', type: 'BOOLEAN DEFAULT false' },
+      { name: 'has_increased_visibility', type: 'BOOLEAN DEFAULT false' },
+      { name: 'carousel_priority', type: 'INTEGER DEFAULT 0' },
+      { name: 'has_maximum_visibility', type: 'BOOLEAN DEFAULT false' },
+      { name: 'promotion_expires_at', type: 'TIMESTAMP' }
+    ];
+    
+    for (const col of adminColumns) {
+      const colCheck = await client.query(`
+        SELECT column_name FROM information_schema.columns 
+        WHERE table_name = 'services' AND column_name = $1
+      `, [col.name]);
+      
+      if (colCheck.rows.length === 0) {
+        console.log(`➕ Adding ${col.name} column...`);
+        await client.query(`
+          ALTER TABLE services 
+          ADD COLUMN ${col.name} ${col.type}
+        `);
+        console.log(`✅ ${col.name} column added`);
+      }
+    }
+    
+    // Create indexes for better performance
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_services_featured ON services(is_featured) WHERE is_featured = true;
+      CREATE INDEX IF NOT EXISTS idx_services_trending ON services(is_trending) WHERE is_trending = true;
+      CREATE INDEX IF NOT EXISTS idx_services_search_priority ON services(search_priority DESC);
+      CREATE INDEX IF NOT EXISTS idx_services_category_priority ON services(category_priority DESC);
+    `);
+    
+    console.log('✅ Admin portal service columns added');
+    
+    // Migration 12: Add badge_type column to service_providers table
+    console.log('\n📋 Adding badge_type column to service_providers table...');
+    
+    const badgeTypeCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'service_providers' AND column_name = 'badge_type'
+    `);
+    
+    if (badgeTypeCheck.rows.length === 0) {
+      console.log('➕ Adding badge_type column...');
+      await client.query(`
+        ALTER TABLE service_providers 
+        ADD COLUMN badge_type VARCHAR(50)
+      `);
+      
+      // Create index for badge queries
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_providers_badge_type ON service_providers(badge_type) WHERE badge_type IS NOT NULL
+      `);
+      
+      console.log('✅ badge_type column added');
+    } else {
+      console.log('✅ badge_type column already exists');
+    }
+    
   } catch (error) {
     console.error('❌ Startup migration error:', error.message);
     // Don't throw - let server continue even if migration fails

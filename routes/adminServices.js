@@ -15,47 +15,16 @@ router.get('/', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        data: [
-          {
-            id: 1,
-            title: 'Serengeti Safari Experience',
-            description: '3-day wildlife safari in Serengeti National Park',
-            category: 'Wildlife Safari',
-            price: 850,
-            duration: '3 days',
-            location: 'Serengeti, Tanzania',
-            status: 'active',
-            created_at: '2026-03-15T09:00:00Z',
-            updated_at: '2026-03-15T09:00:00Z',
-            provider_name: 'Safari Adventures Ltd',
-            provider_id: 1,
-            provider_email: 'info@safariadventures.com'
-          },
-          {
-            id: 2,
-            title: 'Kilimanjaro Base Camp Trek',
-            description: '5-day trekking adventure to Kilimanjaro base camp',
-            category: 'Mountain Trekking',
-            price: 1200,
-            duration: '5 days',
-            location: 'Kilimanjaro, Tanzania',
-            status: 'pending',
-            created_at: '2026-03-14T11:30:00Z',
-            updated_at: '2026-03-14T11:30:00Z',
-            provider_name: 'Mountain Trekking Co',
-            provider_id: 2,
-            provider_email: 'contact@mountaintrek.com'
-          }
-        ].slice(0, parseInt(req.query.limit || 20)),
-        pages: 8,
-        total: 156,
+        services: [],
         pagination: {
-          currentPage: parseInt(req.query.page) || 1,
-          totalPages: 8,
-          totalItems: 156,
-          itemsPerPage: parseInt(req.query.limit) || 20
+          currentPage: 1,
+          pages: 0,
+          total: 0,
+          totalPages: 0,
+          totalItems: 0,
+          itemsPerPage: 20
         },
-        message: 'Demo data - Connect database for live service data'
+        message: 'No database connection - Please check database configuration'
       });
     }
 
@@ -80,13 +49,13 @@ router.get('/', async (req, res) => {
       paramIndex++;
     }
 
-    if (category) {
+    if (category && category !== 'all') {
       whereConditions.push(`s.category = $${paramIndex}`);
       queryParams.push(category);
       paramIndex++;
     }
 
-    if (status) {
+    if (status && status !== 'all') {
       whereConditions.push(`s.status = $${paramIndex}`);
       queryParams.push(status);
       paramIndex++;
@@ -101,7 +70,19 @@ router.get('/', async (req, res) => {
       SELECT 
         s.id, s.title, s.description, s.category, s.price,
         s.duration, s.location, s.status, s.created_at, s.updated_at,
-        sp.business_name as provider_name, sp.id as provider_id,
+        COALESCE(s.is_featured, false) as is_featured, 
+        COALESCE(s.is_trending, false) as is_trending, 
+        COALESCE(s.images, '[]'::jsonb) as images, 
+        COALESCE(s.total_bookings, 0) as total_bookings, 
+        COALESCE(s.total_favorites, 0) as total_favorites,
+        COALESCE(s.search_priority, 0) as search_priority, 
+        COALESCE(s.category_priority, 0) as category_priority, 
+        COALESCE(s.is_enhanced_listing, false) as is_enhanced_listing,
+        COALESCE(s.has_increased_visibility, false) as has_increased_visibility, 
+        COALESCE(s.carousel_priority, 0) as carousel_priority, 
+        COALESCE(s.has_maximum_visibility, false) as has_maximum_visibility,
+        s.promotion_expires_at,
+        sp.business_name, sp.id as provider_id,
         u.email as provider_email
       FROM services s
       LEFT JOIN service_providers sp ON s.provider_id = sp.id
@@ -132,11 +113,11 @@ router.get('/', async (req, res) => {
 
     res.json({
       success: true,
-      data: servicesResult.rows,
-      pages: totalPages,
-      total: totalServices,
+      services: servicesResult.rows,
       pagination: {
         currentPage: parseInt(page),
+        pages: totalPages,
+        total: totalServices,
         totalPages,
         totalItems: totalServices,
         itemsPerPage: parseInt(limit)
@@ -158,37 +139,37 @@ router.get('/stats', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        data: {
-          total: 156,
-          active: 142,
-          pending: 14,
-          categories: [
-            { category: 'Wildlife Safari', count: 45 },
-            { category: 'Mountain Trekking', count: 32 },
-            { category: 'Cultural Tours', count: 28 },
-            { category: 'Beach Activities', count: 25 },
-            { category: 'Adventure Sports', count: 26 }
-          ],
-          message: 'Demo data - Connect database for live statistics'
-        }
+        stats: {
+          total_services: 0,
+          featured_services: 0,
+          trending_services: 0,
+          total_categories: 0,
+          active: 0,
+          pending: 0
+        },
+        message: 'No database connection - Please check database configuration'
       });
     }
 
-    const [totalResult, activeResult, pendingResult, categoriesResult] = await Promise.all([
+    const [totalResult, activeResult, pendingResult, featuredResult, trendingResult, categoriesResult] = await Promise.all([
       pool.query('SELECT COUNT(*) as count FROM services'),
       pool.query("SELECT COUNT(*) as count FROM services WHERE status = 'active'"),
       pool.query("SELECT COUNT(*) as count FROM services WHERE status = 'pending'"),
-      pool.query('SELECT category, COUNT(*) as count FROM services GROUP BY category ORDER BY count DESC')
+      pool.query('SELECT COUNT(*) as count FROM services WHERE is_featured = true'),
+      pool.query('SELECT COUNT(*) as count FROM services WHERE is_trending = true'),
+      pool.query('SELECT COUNT(DISTINCT category) as count FROM services WHERE category IS NOT NULL')
     ]);
 
     const stats = {
-      total: parseInt(totalResult.rows[0].count) || 0,
+      total_services: parseInt(totalResult.rows[0].count) || 0,
+      featured_services: parseInt(featuredResult.rows[0].count) || 0,
+      trending_services: parseInt(trendingResult.rows[0].count) || 0,
+      total_categories: parseInt(categoriesResult.rows[0].count) || 0,
       active: parseInt(activeResult.rows[0].count) || 0,
-      pending: parseInt(pendingResult.rows[0].count) || 0,
-      categories: categoriesResult.rows
+      pending: parseInt(pendingResult.rows[0].count) || 0
     };
 
-    res.json({ success: true, data: stats });
+    res.json({ success: true, stats });
   } catch (error) {
     console.error('Admin services stats error:', error);
     res.status(500).json({ 
@@ -205,14 +186,8 @@ router.get('/categories', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        categories: [
-          { category: 'Wildlife Safari', count: 45 },
-          { category: 'Mountain Trekking', count: 32 },
-          { category: 'Cultural Tours', count: 28 },
-          { category: 'Beach Activities', count: 25 },
-          { category: 'Adventure Sports', count: 26 }
-        ],
-        message: 'Demo data - Connect database for live categories'
+        categories: [],
+        message: 'No database connection - Please check database configuration'
       });
     }
 
@@ -243,6 +218,13 @@ router.get('/categories', async (req, res) => {
 // Get single service by ID
 router.get('/:id', async (req, res) => {
   try {
+    if (!pool) {
+      return res.status(404).json({
+        success: false,
+        message: 'No database connection'
+      });
+    }
+
     const { id } = req.params;
 
     const serviceQuery = `
@@ -282,6 +264,13 @@ router.get('/:id', async (req, res) => {
 // Update service status
 router.patch('/:id/status', async (req, res) => {
   try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        message: 'No database connection - Status update simulated'
+      });
+    }
+
     const { id } = req.params;
     const { status } = req.body;
 
@@ -315,6 +304,258 @@ router.patch('/:id/status', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Failed to update service status',
+      error: error.message 
+    });
+  }
+});
+
+// Toggle service featured status
+router.patch('/:id/featured', async (req, res) => {
+  try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        message: 'No database connection - Featured status update simulated'
+      });
+    }
+
+    const { id } = req.params;
+    const { is_featured } = req.body;
+
+    const result = await pool.query(
+      'UPDATE services SET is_featured = $1, updated_at = NOW() WHERE id = $2 RETURNING id, title, is_featured',
+      [is_featured, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Service ${is_featured ? 'added to' : 'removed from'} featured`,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Admin service featured toggle error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update featured status',
+      error: error.message 
+    });
+  }
+});
+
+// Toggle service trending status
+router.patch('/:id/trending', async (req, res) => {
+  try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        message: 'No database connection - Trending status update simulated'
+      });
+    }
+
+    const { id } = req.params;
+    const { is_trending } = req.body;
+
+    const result = await pool.query(
+      'UPDATE services SET is_trending = $1, updated_at = NOW() WHERE id = $2 RETURNING id, title, is_trending',
+      [is_trending, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Service ${is_trending ? 'added to' : 'removed from'} trending`,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Admin service trending toggle error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update trending status',
+      error: error.message 
+    });
+  }
+});
+
+// Update service promotion settings
+router.patch('/:id/promotion', async (req, res) => {
+  try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        message: 'No database connection - Promotion settings update simulated'
+      });
+    }
+
+    const { id } = req.params;
+    const {
+      search_priority,
+      category_priority,
+      is_enhanced_listing,
+      has_increased_visibility,
+      carousel_priority,
+      has_maximum_visibility,
+      promotion_expires_at
+    } = req.body;
+
+    const result = await pool.query(`
+      UPDATE services SET 
+        search_priority = $1,
+        category_priority = $2,
+        is_enhanced_listing = $3,
+        has_increased_visibility = $4,
+        carousel_priority = $5,
+        has_maximum_visibility = $6,
+        promotion_expires_at = $7,
+        updated_at = NOW()
+      WHERE id = $8 
+      RETURNING id, title
+    `, [
+      search_priority || 0,
+      category_priority || 0,
+      is_enhanced_listing || false,
+      has_increased_visibility || false,
+      carousel_priority || 0,
+      has_maximum_visibility || false,
+      promotion_expires_at || null,
+      id
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Promotion settings updated successfully',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Admin service promotion update error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update promotion settings',
+      error: error.message 
+    });
+  }
+});
+
+// Bulk update services
+router.post('/bulk-update', async (req, res) => {
+  try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        message: 'No database connection - Bulk update simulated'
+      });
+    }
+
+    const { service_ids, action, value } = req.body;
+
+    if (!service_ids || !Array.isArray(service_ids) || service_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'service_ids array is required'
+      });
+    }
+
+    let updateQuery = '';
+    let updateParams = [];
+
+    if (action === 'featured') {
+      updateQuery = `
+        UPDATE services 
+        SET is_featured = $1, updated_at = NOW() 
+        WHERE id = ANY($2::int[])
+      `;
+      updateParams = [value, service_ids];
+    } else if (action === 'trending') {
+      updateQuery = `
+        UPDATE services 
+        SET is_trending = $1, updated_at = NOW() 
+        WHERE id = ANY($2::int[])
+      `;
+      updateParams = [value, service_ids];
+    } else if (action === 'status') {
+      updateQuery = `
+        UPDATE services 
+        SET status = $1, updated_at = NOW() 
+        WHERE id = ANY($2::int[])
+      `;
+      updateParams = [value, service_ids];
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid action. Must be featured, trending, or status'
+      });
+    }
+
+    const result = await pool.query(updateQuery, updateParams);
+
+    res.json({
+      success: true,
+      message: `Bulk ${action} update completed for ${result.rowCount} services`,
+      data: { service_ids, action, value, updated_count: result.rowCount }
+    });
+  } catch (error) {
+    console.error('Admin service bulk update error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to bulk update services',
+      error: error.message 
+    });
+  }
+});
+
+// Delete service
+router.delete('/:id', async (req, res) => {
+  try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        message: 'No database connection - Service deletion simulated'
+      });
+    }
+
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM services WHERE id = $1 RETURNING id, title',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Service deleted successfully',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Admin service delete error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to delete service',
       error: error.message 
     });
   }
