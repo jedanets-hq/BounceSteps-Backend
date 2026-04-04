@@ -64,6 +64,10 @@ const corsOptions = {
       'https://bouncesteps.com',
       'https://www.bouncesteps.com',
       'https://api.bouncesteps.com',
+      // Admin portal domains
+      'https://admin.bouncesteps.com',
+      'https://bouncesteps-admin.vercel.app',
+      /\.vercel\.app$/,  // Allows all Vercel subdomains
       /\.netlify\.app$/,  // Allows all Netlify subdomains
       /\.run\.app$/  // Allows all Google Cloud Run domains
     ];
