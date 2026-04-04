@@ -237,15 +237,6 @@ try {
       user: { id: req.params.id, is_active: true }
     });
   });
-
-  // User delete endpoint
-  router.delete('/users/:id', (req, res) => {
-    res.json({
-      success: true,
-      message: 'User deleted permanently',
-      user: { id: req.params.id, deleted: true }
-    });
-  });
   
   // Providers routes
   router.get('/providers', (req, res) => {

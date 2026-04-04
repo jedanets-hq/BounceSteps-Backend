@@ -12,6 +12,14 @@ try {
 // Get all services with filtering and search
 router.get('/', async (req, res) => {
   try {
+    // Check if database pool is available
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+    
     const { 
       page = 1, 
       limit = 20, 
@@ -173,6 +181,14 @@ router.get('/', async (req, res) => {
 // Get service statistics
 router.get('/stats', async (req, res) => {
   try {
+    // Check if database pool is available
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+    
     const result = await pool.query(`
       SELECT 
         COUNT(*) as total_services,
