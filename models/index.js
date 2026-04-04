@@ -151,6 +151,8 @@ const Message = {
         u.first_name, 
         u.last_name, 
         u.avatar_url,
+        u.user_type,
+        sp.business_name,
         m.message_text as last_message,
         m.created_at as last_message_time,
         m.is_read
@@ -168,6 +170,7 @@ const Message = {
         WHERE traveller_id = $1 OR provider_id = $1
       ) m
       JOIN users u ON u.id = m.other_user_id
+      LEFT JOIN service_providers sp ON sp.user_id = u.id
       ORDER BY other_user_id, m.created_at DESC`,
       [userId]
     );

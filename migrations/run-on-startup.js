@@ -11,6 +11,56 @@ async function runStartupMigrations() {
   try {
     console.log('🔧 Running startup migrations...');
     
+    // Migration 0: Create service_providers table if it doesn't exist
+    console.log('\n📋 Creating service_providers table...');
+    
+    const serviceProvidersTableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'service_providers'
+      );
+    `);
+    
+    if (!serviceProvidersTableCheck.rows[0].exists) {
+      console.log('🔧 Creating service_providers table...');
+      
+      await client.query(`
+        CREATE TABLE service_providers (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          business_name VARCHAR(255) NOT NULL,
+          business_type VARCHAR(255) DEFAULT 'General Services',
+          description TEXT,
+          location TEXT,
+          service_location TEXT,
+          country VARCHAR(100) DEFAULT 'Tanzania',
+          region VARCHAR(100),
+          district VARCHAR(100),
+          area VARCHAR(255),
+          ward VARCHAR(100),
+          location_data JSONB DEFAULT '{}',
+          service_categories JSONB DEFAULT '[]',
+          is_verified BOOLEAN DEFAULT FALSE,
+          is_active BOOLEAN DEFAULT TRUE,
+          rating DECIMAL(3,2) DEFAULT 0.0,
+          total_bookings INTEGER DEFAULT 0,
+          badge_type VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id)
+        );
+        
+        CREATE INDEX idx_service_providers_user_id ON service_providers(user_id);
+        CREATE INDEX idx_service_providers_region ON service_providers(region);
+        CREATE INDEX idx_service_providers_district ON service_providers(district);
+        CREATE INDEX idx_service_providers_is_active ON service_providers(is_active);
+      `);
+      
+      console.log('✅ service_providers table created');
+    } else {
+      console.log('✅ service_providers table already exists');
+    }
+    
     // Migration 1: Fix bookings table schema - add missing columns
     console.log('\n📋 Fixing bookings table schema...');
     
@@ -600,6 +650,116 @@ async function runStartupMigrations() {
       console.log('✅ badge_type column added');
     } else {
       console.log('✅ badge_type column already exists');
+    }
+    
+    // Migration 13: Fix favorites table constraints
+    console.log('\n📋 Fixing favorites table constraints...');
+    
+    // First, create the favorites table if it doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS favorites (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+          service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CHECK (
+              (provider_id IS NOT NULL AND service_id IS NULL) OR 
+              (provider_id IS NULL AND service_id IS NOT NULL)
+          )
+      )
+    `);
+    
+    // Drop existing constraints if they exist (to avoid conflicts)
+    await client.query(`
+      DROP INDEX IF EXISTS favorites_user_provider_unique;
+      DROP INDEX IF EXISTS favorites_user_service_unique;
+    `);
+    
+    // Add unique constraints for provider favorites
+    await client.query(`
+      CREATE UNIQUE INDEX favorites_user_provider_unique 
+      ON favorites (user_id, provider_id) 
+      WHERE provider_id IS NOT NULL
+    `);
+    
+    // Add unique constraints for service favorites  
+    await client.query(`
+      CREATE UNIQUE INDEX favorites_user_service_unique 
+      ON favorites (user_id, service_id) 
+      WHERE service_id IS NOT NULL
+    `);
+    
+    // Create indexes for better performance
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
+      CREATE INDEX IF NOT EXISTS idx_favorites_provider_id ON favorites(provider_id);
+      CREATE INDEX IF NOT EXISTS idx_favorites_service_id ON favorites(service_id);
+    `);
+    
+    console.log('✅ Favorites table constraints fixed');
+    
+    // Migration 14: Add images column to traveler_stories table
+    console.log('\n📋 Adding images column to traveler_stories table...');
+    
+    const imagesColumnCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'traveler_stories' AND column_name = 'images'
+    `);
+    
+    if (imagesColumnCheck.rows.length === 0) {
+      console.log('➕ Adding images column...');
+      await client.query(`
+        ALTER TABLE traveler_stories 
+        ADD COLUMN images TEXT DEFAULT '[]'
+      `);
+      
+      // Update existing records to have empty array for images
+      await client.query(`
+        UPDATE traveler_stories 
+        SET images = '[]' 
+        WHERE images IS NULL
+      `);
+      
+      console.log('✅ images column added to traveler_stories table');
+    } else {
+      console.log('✅ images column already exists in traveler_stories table');
+    }
+    
+    // Migration 15: Create provider_badges table
+    console.log('\n📋 Creating provider_badges table...');
+    
+    const providerBadgesTableCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'provider_badges'
+      );
+    `);
+    
+    if (!providerBadgesTableCheck.rows[0].exists) {
+      console.log('🔧 Creating provider_badges table...');
+      
+      await client.query(`
+        CREATE TABLE provider_badges (
+          id SERIAL PRIMARY KEY,
+          provider_id INTEGER NOT NULL REFERENCES service_providers(id) ON DELETE CASCADE,
+          badge_type VARCHAR(50) NOT NULL CHECK (badge_type IN ('bronze', 'silver', 'gold', 'platinum')),
+          assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(provider_id, badge_type)
+        );
+        
+        CREATE INDEX idx_provider_badges_provider_id ON provider_badges(provider_id);
+        CREATE INDEX idx_provider_badges_badge_type ON provider_badges(badge_type);
+        CREATE INDEX idx_provider_badges_active ON provider_badges(is_active) WHERE is_active = true;
+      `);
+      
+      console.log('✅ provider_badges table created');
+    } else {
+      console.log('✅ provider_badges table already exists');
     }
     
   } catch (error) {

@@ -13,21 +13,10 @@ router.get('/', async (req, res) => {
         u.first_name, 
         u.last_name, 
         u.phone, 
-        u.avatar_url,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'badge_type', pb.badge_type,
-              'assigned_at', pb.assigned_at
-            )
-          ) FILTER (WHERE pb.badge_type IS NOT NULL),
-          '[]'
-        ) as badges
+        u.avatar_url
       FROM service_providers sp
       JOIN users u ON sp.user_id = u.id
-      LEFT JOIN provider_badges pb ON sp.id = pb.provider_id
       WHERE u.is_active = true
-      GROUP BY sp.id, u.id
       ORDER BY sp.rating DESC, sp.created_at DESC
     `);
     
@@ -70,11 +59,11 @@ router.get('/my-followers', passport.authenticate('jwt', { session: false }), as
     console.log('✅ Found provider ID:', providerId);
 
     const result = await pool.query(`
-      SELECT u.id, u.first_name, u.last_name, u.email, u.avatar_url, pf.followed_at
+      SELECT u.id, u.first_name, u.last_name, u.email, u.avatar_url, pf.created_at as created_at
       FROM provider_followers pf
-      JOIN users u ON pf.follower_id = u.id
+      JOIN users u ON pf.user_id = u.id
       WHERE pf.provider_id = $1
-      ORDER BY pf.followed_at DESC
+      ORDER BY pf.created_at DESC
     `, [providerId]);
 
     console.log(`✅ Found ${result.rows.length} followers`);
@@ -112,7 +101,7 @@ router.get('/:id', async (req, res) => {
         u.phone, 
         u.avatar_url, 
         u.is_verified,
-        pb.badge_type,
+        COALESCE(pb.badge_type, '') as badge_type,
         pb.assigned_at as badge_assigned_at,
         pb.notes as badge_notes
       FROM service_providers sp
@@ -151,11 +140,7 @@ router.get('/:id', async (req, res) => {
              s.is_featured,
              s.created_at,
              s.description,
-             CASE 
-               WHEN s.images IS NULL OR s.images = '' OR s.images = '[]' THEN '[]'::jsonb
-               WHEN s.images::text ~ '^\\[.*\\]$' THEN s.images::jsonb
-               ELSE jsonb_build_array(s.images)
-             END as images,
+             s.images,
              s.amenities,
              s.payment_methods,
              s.contact_info,
@@ -205,33 +190,67 @@ router.get('/:id', async (req, res) => {
 
 // Follow a provider
 router.post('/:id/follow', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  const client = await pool.connect();
   try {
-    const providerId = req.params.id;
+    const providerId = parseInt(req.params.id);
     const userId = req.user.id;
+
+    // Validate provider ID
+    if (isNaN(providerId)) {
+      return res.status(400).json({ success: false, message: 'Invalid provider ID' });
+    }
 
     console.log('👤 User', userId, 'following provider', providerId);
 
+    // Start transaction to ensure atomicity
+    await client.query('BEGIN');
+
+    // First ensure the provider_followers table exists BEFORE any queries
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS provider_followers (
+        id SERIAL PRIMARY KEY,
+        provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider_id, user_id)
+      )
+    `);
+
+    // Verify provider exists
+    const providerExists = await client.query(
+      'SELECT id FROM service_providers WHERE id = $1',
+      [providerId]
+    );
+
+    if (providerExists.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Provider not found' });
+    }
+
     // Check if already following
-    const checkResult = await pool.query(
-      'SELECT * FROM provider_followers WHERE provider_id = $1 AND follower_id = $2',
+    const checkResult = await client.query(
+      'SELECT * FROM provider_followers WHERE provider_id = $1 AND user_id = $2',
       [providerId, userId]
     );
 
     if (checkResult.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.json({ success: false, message: 'Already following this provider' });
     }
 
     // Add follower
-    await pool.query(
-      'INSERT INTO provider_followers (provider_id, follower_id, followed_at) VALUES ($1, $2, NOW())',
+    await client.query(
+      'INSERT INTO provider_followers (provider_id, user_id) VALUES ($1, $2)',
       [providerId, userId]
     );
 
     // Get updated follower count
-    const countResult = await pool.query(
+    const countResult = await client.query(
       'SELECT COUNT(*) as count FROM provider_followers WHERE provider_id = $1',
       [providerId]
     );
+
+    await client.query('COMMIT');
 
     res.json({ 
       success: true, 
@@ -239,34 +258,55 @@ router.post('/:id/follow', passport.authenticate('jwt', { session: false }), asy
       followers_count: parseInt(countResult.rows[0].count)
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('❌ Follow provider error:', error);
-    res.status(500).json({ success: false, message: 'Failed to follow provider' });
+    res.status(500).json({ success: false, message: 'Failed to follow provider', error: error.message });
+  } finally {
+    client.release();
   }
 });
 
 // Unfollow a provider
 router.post('/:id/unfollow', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  const client = await pool.connect();
   try {
     const providerId = req.params.id;
     const userId = req.user.id;
 
     console.log('👤 User', userId, 'unfollowing provider', providerId);
 
+    // Start transaction to ensure atomicity
+    await client.query('BEGIN');
+
+    // First ensure the provider_followers table exists BEFORE any queries
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS provider_followers (
+        id SERIAL PRIMARY KEY,
+        provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider_id, user_id)
+      )
+    `);
+
     // Remove follower
-    const result = await pool.query(
-      'DELETE FROM provider_followers WHERE provider_id = $1 AND follower_id = $2 RETURNING *',
+    const result = await client.query(
+      'DELETE FROM provider_followers WHERE provider_id = $1 AND user_id = $2 RETURNING *',
       [providerId, userId]
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.json({ success: false, message: 'You are not following this provider' });
     }
 
     // Get updated follower count
-    const countResult = await pool.query(
+    const countResult = await client.query(
       'SELECT COUNT(*) as count FROM provider_followers WHERE provider_id = $1',
       [providerId]
     );
+
+    await client.query('COMMIT');
 
     res.json({ 
       success: true, 
@@ -274,8 +314,11 @@ router.post('/:id/unfollow', passport.authenticate('jwt', { session: false }), a
       followers_count: parseInt(countResult.rows[0].count)
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('❌ Unfollow provider error:', error);
-    res.status(500).json({ success: false, message: 'Failed to unfollow provider' });
+    res.status(500).json({ success: false, message: 'Failed to unfollow provider', error: error.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -283,6 +326,17 @@ router.post('/:id/unfollow', passport.authenticate('jwt', { session: false }), a
 router.get('/:id/followers/count', async (req, res) => {
   try {
     const providerId = req.params.id;
+
+    // First check if provider_followers table exists, if not create it
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS provider_followers (
+        id SERIAL PRIMARY KEY,
+        provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider_id, user_id)
+      )
+    `);
 
     const result = await pool.query(
       'SELECT COUNT(*) as count FROM provider_followers WHERE provider_id = $1',
@@ -296,6 +350,74 @@ router.get('/:id/followers/count', async (req, res) => {
   } catch (error) {
     console.error('❌ Get follower count error:', error);
     res.status(500).json({ success: false, message: 'Failed to get follower count' });
+  }
+});
+
+// Send email to provider
+router.post('/:id/contact', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  try {
+    const providerId = req.params.id;
+    const userId = req.user.id;
+    const { subject, message } = req.body;
+
+    if (!subject || !message) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Subject and message are required' 
+      });
+    }
+
+    // Create the contact_requests table if it doesn't exist FIRST
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS contact_requests (
+        id SERIAL PRIMARY KEY,
+        sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Get provider details
+    const providerResult = await pool.query(`
+      SELECT sp.*, u.email, u.first_name, u.last_name
+      FROM service_providers sp
+      JOIN users u ON sp.user_id = u.id
+      WHERE sp.id = $1
+    `, [providerId]);
+
+    if (providerResult.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Provider not found' 
+      });
+    }
+
+    const provider = providerResult.rows[0];
+    
+    // Get sender details
+    const senderResult = await pool.query(`
+      SELECT first_name, last_name, email FROM users WHERE id = $1
+    `, [userId]);
+
+    const sender = senderResult.rows[0];
+
+    // Store the contact request in the database
+    await pool.query(`
+      INSERT INTO contact_requests (
+        sender_id, provider_id, subject, message, created_at
+      ) VALUES ($1, $2, $3, $4, NOW())
+    `, [userId, providerId, subject, message]);
+
+    res.json({ 
+      success: true, 
+      message: 'Your message has been sent to the provider. They will contact you soon.',
+      provider_email: provider.email // For frontend to show confirmation
+    });
+  } catch (error) {
+    console.error('❌ Send contact email error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send message to provider' });
   }
 });
 

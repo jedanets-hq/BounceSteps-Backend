@@ -5,10 +5,28 @@ const passport = require('passport');
 
 // Get all favorites for authenticated user
 router.get('/', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  const client = await pool.connect();
   try {
     const userId = req.user.id;
     
-    const result = await pool.query(`
+    // Ensure favorites table exists with proper constraints
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS favorites (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+        service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT favorites_user_provider_unique UNIQUE(user_id, provider_id),
+        CONSTRAINT favorites_user_service_unique UNIQUE(user_id, service_id),
+        CONSTRAINT favorites_provider_or_service_check CHECK (
+          (provider_id IS NOT NULL AND service_id IS NULL) OR 
+          (provider_id IS NULL AND service_id IS NOT NULL)
+        )
+      )
+    `);
+    
+    const result = await client.query(`
       SELECT f.*, 
              -- Provider data (if favorited provider)
              sp.id as provider_id,
@@ -30,7 +48,6 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
              s.description as service_description,
              s.category as service_category,
              s.price as service_price,
-             s.currency as service_currency,
              s.duration as service_duration,
              s.location as service_location,
              s.region as service_region,
@@ -38,7 +55,6 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
              s.area as service_area,
              s.images as service_images,
              s.amenities as service_amenities,
-             s.average_rating as service_rating,
              s.is_active as service_is_active,
              -- Service provider info for services
              sp2.id as service_provider_id,
@@ -55,12 +71,15 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
     res.json({ success: true, favorites: result.rows });
   } catch (error) {
     console.error('Get favorites error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get favorites' });
+    res.status(500).json({ success: false, message: 'Failed to get favorites', error: error.message });
+  } finally {
+    client.release();
   }
 });
 
 // Add provider or service to favorites
 router.post('/add', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  const client = await pool.connect();
   try {
     const userId = req.user.id;
     const { providerId, serviceId } = req.body;
@@ -73,23 +92,45 @@ router.post('/add', passport.authenticate('jwt', { session: false }), async (req
       });
     }
     
+    // Start transaction
+    await client.query('BEGIN');
+    
+    // Ensure favorites table exists with proper constraints
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS favorites (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+        service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT favorites_user_provider_unique UNIQUE(user_id, provider_id),
+        CONSTRAINT favorites_user_service_unique UNIQUE(user_id, service_id),
+        CONSTRAINT favorites_provider_or_service_check CHECK (
+          (provider_id IS NOT NULL AND service_id IS NULL) OR 
+          (provider_id IS NULL AND service_id IS NOT NULL)
+        )
+      )
+    `);
+    
     // Add to favorites (or ignore if already exists)
     let result;
     if (providerId) {
-      result = await pool.query(`
+      result = await client.query(`
         INSERT INTO favorites (user_id, provider_id)
         VALUES ($1, $2)
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (user_id, provider_id) DO NOTHING
         RETURNING *
       `, [userId, providerId]);
     } else {
-      result = await pool.query(`
+      result = await client.query(`
         INSERT INTO favorites (user_id, service_id)
         VALUES ($1, $2)
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (user_id, service_id) DO NOTHING
         RETURNING *
       `, [userId, serviceId]);
     }
+    
+    await client.query('COMMIT');
     
     if (result.rows.length > 0) {
       res.json({ success: true, message: 'Added to favorites', favorite: result.rows[0] });
@@ -97,8 +138,11 @@ router.post('/add', passport.authenticate('jwt', { session: false }), async (req
       res.json({ success: true, message: 'Already in favorites' });
     }
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Add to favorites error:', error);
-    res.status(500).json({ success: false, message: 'Failed to add to favorites' });
+    res.status(500).json({ success: false, message: 'Failed to add to favorites', error: error.message });
+  } finally {
+    client.release();
   }
 });
 

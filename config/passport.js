@@ -110,8 +110,9 @@ if (process.env.JWT_SECRET) {
     try {
       const user = await User.findById(payload.id);
       if (user) {
-        // Remove password from user object
+        // Remove password from user object and add JWT payload data
         delete user.password;
+        user.userType = payload.userType; // Add userType from JWT payload
         return done(null, user);
       }
       return done(null, false);

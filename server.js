@@ -8,6 +8,7 @@ const app = express();
 
 // Import database initialization
 const { runStartupMigrations } = require('./migrations/run-on-startup');
+const { addSampleData } = require('./migrations/add-sample-data');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -15,6 +16,7 @@ const servicesRoutes = require('./routes/services');
 const providersRoutes = require('./routes/providers');
 const bookingsRoutes = require('./routes/bookings');
 const cartRoutes = require('./routes/cart');
+const paymentsRoutes = require('./routes/payments');
 const favoritesRoutes = require('./routes/favorites');
 const plansRoutes = require('./routes/plans');
 const usersRoutes = require('./routes/users');
@@ -25,7 +27,14 @@ const reviewsRoutes = require('./routes/reviews');
 const messagesRoutes = require('./routes/messages');
 const adminRoutes = require('./routes/admin');
 
-// Admin sub-routes are now mounted inside adminRoutes (routes/admin.js)
+// Admin routes
+const adminAuthRoutes = require('./routes/adminAuth');
+const adminUsersRoutes = require('./routes/adminUsers');
+const adminProvidersRoutes = require('./routes/adminProviders');
+const adminPaymentsRoutes = require('./routes/adminPayments');
+const adminDashboardRoutes = require('./routes/adminDashboard');
+const adminServicesRoutes = require('./routes/adminServices');
+const adminTravelerStoriesRoutes = require('./routes/adminTravelerStories');
 
 // Provider payments route
 const providerPaymentsRoutes = require('./routes/providerPayments');
@@ -33,66 +42,68 @@ const providerPaymentsRoutes = require('./routes/providerPayments');
 // Admin middleware
 const { authenticateAdmin } = require('./middleware/adminAuth');
 
-// ============================================
-// CORS Configuration - Allow specific origins
-// ============================================
-const allowedOrigins = [
-  'https://bouncesteps.com',
-  'https://www.bouncesteps.com',
-  'https://bounce-steps-front-end.vercel.app',
-  'https://bounce-steps-front-end-git-main-jedanets-hqs-projects.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000'
-];
-
-// Enhanced CORS middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  console.log('🔍 Request:', {
-    method: req.method,
-    path: req.path,
-    origin: origin || 'no-origin'
-  });
-  
-  // Always set CORS headers for allowed origins
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    console.log('✅ CORS allowed for:', origin);
-  } else if (!origin) {
-    // Allow requests with no origin (like Postman, curl)
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  } else {
-    // For production, still allow but log warning
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    console.log('⚠️ CORS allowed (with warning) for:', origin);
-  }
-  
-  // Set all required CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma, Expires');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
-  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
-  
-  // Handle OPTIONS preflight requests
-  if (req.method === 'OPTIONS') {
-    console.log('✅ OPTIONS preflight - responding 200');
-    return res.status(200).end();
-  }
-  
-  next();
-});
-
-// Backup CORS middleware - ALLOW ALL ORIGINS FOR PRODUCTION FIX
-app.use(cors({
-  origin: true, // Allow all origins
+// CORS Configuration for Production
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    
+    // List of allowed origins
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+      'http://localhost:5176',  // Admin Portal
+      'http://localhost:4028',  // Added for Vite dev server
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      // Production domains
+      'https://bouncesteps.com',
+      'https://www.bouncesteps.com',
+      'https://api.bouncesteps.com',
+      /\.netlify\.app$/,  // Allows all Netlify subdomains
+      /\.run\.app$/  // Allows all Google Cloud Run domains
+    ];
+    
+    // In development, allow all localhost origins and local network IPs
+    if (isDevelopment && (origin.startsWith('http://localhost:') || origin.match(/^http:\/\/192\.168\.\d+\.\d+:/))) {
+      return callback(null, true);
+    }
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return origin === allowedOrigin;
+      }
+      if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      if (isDevelopment) {
+        console.log('⚠️  Development mode - allowing anyway');
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'expires', 'cache-control', 'pragma', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'expires', 'cache-control', 'pragma'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
-}));
+};
 
+// Middleware
+app.use(cors(corsOptions));
 // Increase body size limit to 50MB for image uploads (base64 encoded images are large)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -122,6 +133,7 @@ app.use('/api/providers', providersRoutes);
 app.use('/api/provider-payments', providerPaymentsRoutes);
 app.use('/api/bookings', bookingsRoutes);
 app.use('/api/cart', cartRoutes);
+app.use('/api/payments', paymentsRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/plans', plansRoutes);
 app.use('/api/users', usersRoutes);
@@ -132,6 +144,15 @@ app.use('/api/messages', messagesRoutes);
 app.use('/api/fix', fixServicesRoutes);
 
 // Admin Portal Routes (No authentication required for local development)
+// Mount specific admin routes FIRST (before general admin routes)
+app.use('/api/admin/auth', adminAuthRoutes);
+app.use('/api/admin/users', adminUsersRoutes);
+app.use('/api/admin/providers', adminProvidersRoutes);
+app.use('/api/admin/payments', adminPaymentsRoutes);
+app.use('/api/admin/dashboard', adminDashboardRoutes);
+app.use('/api/admin/services', adminServicesRoutes);
+app.use('/api/admin/traveler-stories', adminTravelerStoriesRoutes);
+// Mount general admin routes LAST (for fallback routes)
 app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
@@ -273,7 +294,7 @@ async function startServer() {
       console.log('========================================');
       console.log(`📍 Port: ${PORT}`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔒 CORS: ✅ ALLOW ALL ORIGINS`);
+      console.log(`🔒 CORS: Enabled for production domains`);
       console.log(`🗄️  Database: ${dbOk ? '✅ Connected' : '❌ Not Connected'}`);
       console.log(`🔑 JWT: ${jwtOk ? '✅ Configured' : '❌ Not Configured'}`);
       console.log('========================================');
@@ -287,9 +308,14 @@ async function startServer() {
         runStartupMigrations()
           .then(() => {
             console.log('✅ Background migrations completed successfully');
+            // Add sample data after migrations
+            return addSampleData();
+          })
+          .then(() => {
+            console.log('✅ Sample data added successfully');
           })
           .catch((error) => {
-            console.warn('⚠️  Background migrations failed:', error.message);
+            console.warn('⚠️  Background migrations/sample data failed:', error.message);
           });
       }
     });

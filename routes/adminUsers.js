@@ -291,4 +291,93 @@ router.post('/:id/restore', async (req, res) => {
   }
 });
 
+// Delete user permanently
+router.delete('/:id', async (req, res) => {
+  try {
+    if (!pool) {
+      return res.json({
+        success: true,
+        message: 'User deleted permanently (demo mode)',
+        user: { id: req.params.id, deleted: true }
+      });
+    }
+
+    const { id } = req.params;
+
+    console.log(`Permanently deleting user ${id}`);
+
+    // First check if user exists
+    const userCheck = await pool.query('SELECT id, email, user_type FROM users WHERE id = $1', [id]);
+    
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+
+    const user = userCheck.rows[0];
+
+    // Start transaction for safe deletion
+    await pool.query('BEGIN');
+
+    try {
+      // Delete related records first (to avoid foreign key constraints)
+      
+      // Delete user's bookings
+      await pool.query('DELETE FROM bookings WHERE user_id = $1', [id]);
+      
+      // Delete user's traveler stories
+      await pool.query('DELETE FROM traveler_stories WHERE user_id = $1', [id]);
+      
+      // Delete user's favorites
+      await pool.query('DELETE FROM favorites WHERE user_id = $1', [id]);
+      
+      // If user is a service provider, delete provider-related data
+      if (user.user_type === 'service_provider') {
+        // Delete services provided by this user
+        await pool.query('DELETE FROM services WHERE provider_id IN (SELECT id FROM service_providers WHERE user_id = $1)', [id]);
+        
+        // Delete service provider record
+        await pool.query('DELETE FROM service_providers WHERE user_id = $1', [id]);
+      }
+      
+      // Finally delete the user
+      const result = await pool.query(
+        'DELETE FROM users WHERE id = $1 RETURNING id, email, user_type',
+        [id]
+      );
+
+      // Commit transaction
+      await pool.query('COMMIT');
+
+      console.log('User deleted permanently:', result.rows[0]);
+      
+      res.json({ 
+        success: true, 
+        message: 'User deleted permanently', 
+        data: { 
+          id: result.rows[0].id, 
+          email: result.rows[0].email,
+          user_type: result.rows[0].user_type,
+          deleted: true 
+        } 
+      });
+
+    } catch (deleteError) {
+      // Rollback transaction on error
+      await pool.query('ROLLBACK');
+      throw deleteError;
+    }
+
+  } catch (error) {
+    console.error('Admin user delete error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to delete user permanently', 
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router;

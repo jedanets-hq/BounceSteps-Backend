@@ -14,6 +14,7 @@ router.get('/', async (req, res) => {
         ts.location,
         ts.trip_date,
         ts.likes_count,
+        ts.images,
         ts.created_at,
         u.first_name,
         u.last_name,
@@ -48,6 +49,7 @@ router.get('/my-stories', authenticateJWT, async (req, res) => {
         content,
         location,
         trip_date,
+        images,
         status,
         likes_count,
         created_at,
@@ -68,7 +70,7 @@ router.get('/my-stories', authenticateJWT, async (req, res) => {
 router.post('/', authenticateJWT, async (req, res) => {
   try {
     const userId = req.user?.id;
-    const { title, content, location, trip_date } = req.body;
+    const { title, content, location, trip_date, images } = req.body;
     
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -78,11 +80,21 @@ router.post('/', authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Title and content are required' });
     }
     
+    // Parse images if provided
+    let parsedImages = [];
+    if (images) {
+      try {
+        parsedImages = typeof images === 'string' ? JSON.parse(images) : images;
+      } catch (e) {
+        console.error('Error parsing images:', e);
+      }
+    }
+    
     const result = await pool.query(`
-      INSERT INTO traveler_stories (user_id, title, content, location, trip_date, status)
-      VALUES ($1, $2, $3, $4, $5, 'pending')
-      RETURNING id, title, content, location, trip_date, status, created_at
-    `, [userId, title, content, location, trip_date || null]);
+      INSERT INTO traveler_stories (user_id, title, content, location, trip_date, images, status)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+      RETURNING id, title, content, location, trip_date, images, status, created_at
+    `, [userId, title, content, location, trip_date || null, JSON.stringify(parsedImages)]);
     
     res.json({ 
       success: true, 
@@ -106,6 +118,7 @@ router.get('/pending', async (req, res) => {
         ts.location,
         ts.trip_date,
         ts.status,
+        ts.images,
         ts.created_at,
         u.id as user_id,
         u.first_name,
@@ -139,6 +152,7 @@ router.get('/all', async (req, res) => {
         ts.trip_date,
         ts.status,
         ts.likes_count,
+        ts.images,
         ts.created_at,
         ts.updated_at,
         u.id as user_id,

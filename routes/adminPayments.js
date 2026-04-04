@@ -212,6 +212,26 @@ router.get('/verification-requests', async (req, res) => {
 
     const { status = 'pending' } = req.query;
 
+    // Check if admin_payment_accounts table exists
+    const tableExistsQuery = `
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'admin_payment_accounts'
+      );
+    `;
+    
+    const tableExistsResult = await pool.query(tableExistsQuery);
+    
+    if (!tableExistsResult.rows[0].exists) {
+      // Table doesn't exist, return empty array
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No verification requests table found'
+      });
+    }
+
     // Since admin_payment_accounts doesn't have provider_id, 
     // we'll return empty array for now or use created_by as user reference
     const query = `
@@ -248,22 +268,28 @@ router.get('/accounts', async (req, res) => {
     if (!pool) {
       return res.json({
         success: true,
-        accounts: [
-          {
-            id: 1,
-            account_type: 'bank_account',
-            account_holder_name: 'BounceSteps Ltd',
-            account_number: '****1234',
-            bank_name: 'Standard Bank',
-            mobile_number: null,
-            is_active: true,
-            created_at: '2026-03-01T00:00:00Z',
-            email: 'admin@bouncesteps.com',
-            first_name: 'Admin',
-            last_name: 'User'
-          }
-        ],
-        message: 'Demo data - Connect database for live account data'
+        accounts: [],
+        message: 'No payment accounts configured'
+      });
+    }
+
+    // Check if admin_payment_accounts table exists
+    const tableExistsQuery = `
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'admin_payment_accounts'
+      );
+    `;
+    
+    const tableExistsResult = await pool.query(tableExistsQuery);
+    
+    if (!tableExistsResult.rows[0].exists) {
+      // Table doesn't exist, return empty array
+      return res.json({
+        success: true,
+        accounts: [],
+        message: 'No payment accounts configured'
       });
     }
 

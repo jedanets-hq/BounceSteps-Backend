@@ -3,6 +3,146 @@ const router = express.Router();
 const { pool } = require('../models');
 const { authenticateJWT } = require('../middleware/jwtAuth');
 
+// Get popular destinations based on service locations and bookings
+router.get('/destinations/popular', async (req, res) => {
+  try {
+    const limit = req.query.limit || 6;
+    
+    // Get popular destinations based on service count and bookings
+    const result = await pool.query(`
+      SELECT 
+        s.region as name,
+        s.district,
+        s.area,
+        COUNT(DISTINCT s.id) as service_count,
+        COUNT(DISTINCT b.id) as booking_count,
+        AVG(s.price) as avg_price,
+        STRING_AGG(DISTINCT s.category, ', ') as categories,
+        ARRAY_AGG(DISTINCT s.images) FILTER (WHERE s.images IS NOT NULL AND s.images != '[]') as all_images
+      FROM services s
+      LEFT JOIN bookings b ON s.id = b.service_id
+      WHERE s.status = 'active' 
+        AND s.is_active = true 
+        AND s.region IS NOT NULL 
+        AND s.region != ''
+      GROUP BY s.region, s.district, s.area
+      HAVING COUNT(DISTINCT s.id) >= 1
+      ORDER BY 
+        COUNT(DISTINCT b.id) DESC,
+        COUNT(DISTINCT s.id) DESC,
+        s.region ASC
+      LIMIT $1
+    `, [limit]);
+    
+    // Process the results to create destination objects
+    const destinations = result.rows.map(row => {
+      // Parse and flatten images from all services in this destination
+      let images = [];
+      if (row.all_images && row.all_images.length > 0) {
+        row.all_images.forEach(imageArray => {
+          if (imageArray && imageArray !== '[]') {
+            try {
+              const parsed = typeof imageArray === 'string' ? JSON.parse(imageArray) : imageArray;
+              if (Array.isArray(parsed)) {
+                images = images.concat(parsed);
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        });
+      }
+      
+      // Use first available image or fallback
+      const primaryImage = images.length > 0 ? images[0] : '/default-destination.jpg';
+      
+      // Create description based on available data
+      let description = '';
+      if (row.service_count > 1) {
+        description = `${row.service_count} services available`;
+      } else {
+        description = `${row.service_count} service available`;
+      }
+      
+      if (row.booking_count > 0) {
+        description += ` • ${row.booking_count} bookings`;
+      }
+      
+      if (row.categories) {
+        const categoryList = row.categories.split(', ').slice(0, 2).join(', ');
+        description += ` • ${categoryList}`;
+      }
+      
+      return {
+        name: row.name,
+        district: row.district,
+        area: row.area,
+        desc: description,
+        img: primaryImage,
+        service_count: parseInt(row.service_count),
+        booking_count: parseInt(row.booking_count),
+        avg_price: row.avg_price ? parseFloat(row.avg_price) : null,
+        categories: row.categories
+      };
+    });
+    
+    console.log(`📍 Found ${destinations.length} popular destinations`);
+    
+    res.json({
+      success: true,
+      destinations: destinations,
+      count: destinations.length
+    });
+  } catch (error) {
+    console.error('Get popular destinations error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to get popular destinations',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Test endpoint to check services data
+router.get('/test/data', async (req, res) => {
+  try {
+    // Check services count
+    const servicesCount = await pool.query('SELECT COUNT(*) FROM services WHERE is_active = true');
+    
+    // Check providers count  
+    const providersCount = await pool.query('SELECT COUNT(*) FROM service_providers');
+    
+    // Check users count
+    const usersCount = await pool.query('SELECT COUNT(*) FROM users');
+    
+    // Get sample services by region
+    const servicesByRegion = await pool.query(`
+      SELECT region, COUNT(*) as count 
+      FROM services 
+      WHERE is_active = true AND region IS NOT NULL 
+      GROUP BY region 
+      ORDER BY count DESC
+    `);
+    
+    res.json({
+      success: true,
+      data: {
+        services_count: parseInt(servicesCount.rows[0].count),
+        providers_count: parseInt(providersCount.rows[0].count),
+        users_count: parseInt(usersCount.rows[0].count),
+        services_by_region: servicesByRegion.rows
+      }
+    });
+  } catch (error) {
+    console.error('Test data error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to get test data',
+      error: error.message
+    });
+  }
+});
+
 // Get all services
 router.get('/', async (req, res) => {
   try {

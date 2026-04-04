@@ -9,126 +9,163 @@ try {
   console.warn('⚠️ Database connection not available for admin services');
 }
 
-// Get services with pagination and filtering
+// Get all services with filtering and search
 router.get('/', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        services: [],
-        pagination: {
-          currentPage: 1,
-          pages: 0,
-          total: 0,
-          totalPages: 0,
-          totalItems: 0,
-          itemsPerPage: 20
-        },
-        message: 'No database connection - Please check database configuration'
-      });
-    }
-
     const { 
       page = 1, 
-      limit = 20,
-      search = '',
-      category = '',
-      status = ''
+      limit = 20, 
+      category, 
+      search, 
+      status,
+      is_featured,
+      is_trending 
     } = req.query;
-
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    const offset = (page - 1) * limit;
     
     // Build WHERE clause
     let whereConditions = [];
     let queryParams = [];
     let paramIndex = 1;
-
-    if (search) {
-      whereConditions.push(`(s.title ILIKE $${paramIndex} OR s.description ILIKE $${paramIndex})`);
-      queryParams.push(`%${search}%`);
-      paramIndex++;
-    }
-
+    
     if (category && category !== 'all') {
       whereConditions.push(`s.category = $${paramIndex}`);
       queryParams.push(category);
       paramIndex++;
     }
-
-    if (status && status !== 'all') {
+    
+    if (search) {
+      whereConditions.push(`(s.title ILIKE $${paramIndex} OR s.description ILIKE $${paramIndex} OR sp.business_name ILIKE $${paramIndex})`);
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+    
+    if (status) {
       whereConditions.push(`s.status = $${paramIndex}`);
       queryParams.push(status);
       paramIndex++;
     }
-
+    
+    if (is_featured !== undefined) {
+      whereConditions.push(`s.is_featured = $${paramIndex}`);
+      queryParams.push(is_featured === 'true');
+      paramIndex++;
+    }
+    
+    if (is_trending !== undefined) {
+      whereConditions.push(`s.is_trending = $${paramIndex}`);
+      queryParams.push(is_trending === 'true');
+      paramIndex++;
+    }
+    
     const whereClause = whereConditions.length > 0 
-      ? `WHERE ${whereConditions.join(' AND ')}` 
+      ? 'WHERE ' + whereConditions.join(' AND ')
       : '';
-
-    // Get services with provider info
-    const servicesQuery = `
-      SELECT 
-        s.id, s.title, s.description, s.category, s.price,
-        s.duration, s.location, s.status, s.created_at, s.updated_at,
-        COALESCE(s.is_featured, false) as is_featured, 
-        COALESCE(s.is_trending, false) as is_trending, 
-        COALESCE(s.images, '[]'::jsonb) as images, 
-        COALESCE(s.total_bookings, 0) as total_bookings, 
-        COALESCE(s.total_favorites, 0) as total_favorites,
-        COALESCE(s.search_priority, 0) as search_priority, 
-        COALESCE(s.category_priority, 0) as category_priority, 
-        COALESCE(s.is_enhanced_listing, false) as is_enhanced_listing,
-        COALESCE(s.has_increased_visibility, false) as has_increased_visibility, 
-        COALESCE(s.carousel_priority, 0) as carousel_priority, 
-        COALESCE(s.has_maximum_visibility, false) as has_maximum_visibility,
-        s.promotion_expires_at,
-        sp.business_name, sp.id as provider_id,
-        u.email as provider_email
-      FROM services s
-      LEFT JOIN service_providers sp ON s.provider_id = sp.id
-      LEFT JOIN users u ON sp.user_id = u.id
-      ${whereClause}
-      ORDER BY s.created_at DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    queryParams.push(parseInt(limit), offset);
-
+    
     // Get total count
-    const countQuery = `
+    const countResult = await pool.query(`
       SELECT COUNT(*) as total
       FROM services s
-      LEFT JOIN service_providers sp ON s.provider_id = sp.id
-      LEFT JOIN users u ON sp.user_id = u.id
+      INNER JOIN service_providers sp ON s.provider_id = sp.id
+      INNER JOIN users u ON sp.user_id = u.id
       ${whereClause}
-    `;
-
-    const [servicesResult, countResult] = await Promise.all([
-      pool.query(servicesQuery, queryParams),
-      pool.query(countQuery, queryParams.slice(0, -2))
-    ]);
-
-    const totalServices = parseInt(countResult.rows[0].total);
-    const totalPages = Math.ceil(totalServices / parseInt(limit));
-
+    `, queryParams);
+    
+    const total = parseInt(countResult.rows[0].total);
+    
+    // Get services with pagination - using s.* to get all service fields including images
+    queryParams.push(limit, offset);
+    const limitParam = paramIndex;
+    const offsetParam = paramIndex + 1;
+    const result = await pool.query(`
+      SELECT 
+        s.id,
+        s.provider_id,
+        s.title,
+        s.description,
+        s.category,
+        s.price,
+        s.duration,
+        s.location,
+        s.status,
+        s.is_featured,
+        s.is_trending,
+        s.images,
+        s.total_bookings,
+        s.total_favorites,
+        s.search_priority,
+        s.category_priority,
+        s.is_enhanced_listing,
+        s.has_increased_visibility,
+        s.carousel_priority,
+        s.has_maximum_visibility,
+        s.promotion_expires_at,
+        s.created_at,
+        s.updated_at,
+        sp.id as service_provider_id,
+        sp.business_name,
+        sp.business_type,
+        sp.location as provider_location,
+        sp.rating as provider_rating,
+        sp.is_verified as provider_verified,
+        u.first_name as provider_first_name,
+        u.last_name as provider_last_name,
+        u.email as provider_email,
+        u.avatar_url,
+        u.is_verified as user_verified,
+        pb.badge_type as provider_badge_type
+      FROM services s
+      INNER JOIN service_providers sp ON s.provider_id = sp.id
+      INNER JOIN users u ON sp.user_id = u.id
+      LEFT JOIN provider_badges pb ON sp.id = pb.provider_id
+      ${whereClause}
+      ORDER BY s.created_at DESC
+      LIMIT $${limitParam} OFFSET $${offsetParam}
+    `, queryParams);
+    
+    // Parse JSON fields - images is already JSONB in database, but handle both cases
+    const parsedServices = result.rows.map(service => {
+      // Handle images field - ensure it's always an array
+      let images = [];
+      if (service.images) {
+        if (typeof service.images === 'string') {
+          try {
+            images = JSON.parse(service.images);
+          } catch (e) {
+            console.warn(`Failed to parse images for service ${service.id}:`, e.message);
+            images = [];
+          }
+        } else if (Array.isArray(service.images)) {
+          images = service.images;
+        }
+      }
+      
+      return {
+        ...service,
+        images: images,
+        amenities: service.amenities ? (typeof service.amenities === 'string' ? JSON.parse(service.amenities) : service.amenities) : [],
+        payment_methods: service.payment_methods ? (typeof service.payment_methods === 'string' ? JSON.parse(service.payment_methods) : service.payment_methods) : {},
+        contact_info: service.contact_info ? (typeof service.contact_info === 'string' ? JSON.parse(service.contact_info) : service.contact_info) : {}
+      };
+    });
+    
     res.json({
       success: true,
-      services: servicesResult.rows,
+      data: parsedServices,
       pagination: {
-        currentPage: parseInt(page),
-        pages: totalPages,
-        total: totalServices,
-        totalPages,
-        totalItems: totalServices,
-        itemsPerPage: parseInt(limit)
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
-    console.error('Admin services error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch services',
-      error: error.message 
+    console.error('Get admin services error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get services',
+      error: error.message
     });
   }
 });
@@ -136,269 +173,128 @@ router.get('/', async (req, res) => {
 // Get service statistics
 router.get('/stats', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        stats: {
-          total_services: 0,
-          featured_services: 0,
-          trending_services: 0,
-          total_categories: 0,
-          active: 0,
-          pending: 0
-        },
-        message: 'No database connection - Please check database configuration'
-      });
-    }
-
-    const [totalResult, activeResult, pendingResult, featuredResult, trendingResult, categoriesResult] = await Promise.all([
-      pool.query('SELECT COUNT(*) as count FROM services'),
-      pool.query("SELECT COUNT(*) as count FROM services WHERE status = 'active'"),
-      pool.query("SELECT COUNT(*) as count FROM services WHERE status = 'pending'"),
-      pool.query('SELECT COUNT(*) as count FROM services WHERE is_featured = true'),
-      pool.query('SELECT COUNT(*) as count FROM services WHERE is_trending = true'),
-      pool.query('SELECT COUNT(DISTINCT category) as count FROM services WHERE category IS NOT NULL')
-    ]);
-
-    const stats = {
-      total_services: parseInt(totalResult.rows[0].count) || 0,
-      featured_services: parseInt(featuredResult.rows[0].count) || 0,
-      trending_services: parseInt(trendingResult.rows[0].count) || 0,
-      total_categories: parseInt(categoriesResult.rows[0].count) || 0,
-      active: parseInt(activeResult.rows[0].count) || 0,
-      pending: parseInt(pendingResult.rows[0].count) || 0
-    };
-
-    res.json({ success: true, stats });
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) as total_services,
+        COUNT(*) FILTER (WHERE status = 'active') as active_services,
+        COUNT(*) FILTER (WHERE is_featured = true) as featured_services,
+        COUNT(*) FILTER (WHERE is_trending = true) as trending_services,
+        COUNT(*) FILTER (WHERE status = 'active') as approved_services,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_services,
+        COUNT(DISTINCT category) as total_categories
+      FROM services
+    `);
+    
+    res.json({
+      success: true,
+      data: result.rows[0]
+    });
   } catch (error) {
-    console.error('Admin services stats error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch service statistics',
-      error: error.message 
+    console.error('Get service stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get service statistics',
+      error: error.message
     });
   }
 });
 
-// Get service categories
+// Get all categories
 router.get('/categories', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        categories: [],
-        message: 'No database connection - Please check database configuration'
-      });
-    }
-
     const result = await pool.query(`
       SELECT 
         category,
         COUNT(*) as count
-      FROM services 
-      WHERE category IS NOT NULL 
-      GROUP BY category 
+      FROM services
+      WHERE category IS NOT NULL AND category != ''
+      GROUP BY category
       ORDER BY count DESC
     `);
-
+    
     res.json({
       success: true,
       categories: result.rows
     });
   } catch (error) {
-    console.error('Admin service categories error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch service categories',
-      error: error.message 
+    console.error('Get categories error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get categories',
+      error: error.message
     });
   }
 });
 
-// Get single service by ID
-router.get('/:id', async (req, res) => {
-  try {
-    if (!pool) {
-      return res.status(404).json({
-        success: false,
-        message: 'No database connection'
-      });
-    }
-
-    const { id } = req.params;
-
-    const serviceQuery = `
-      SELECT 
-        s.*, 
-        sp.business_name as provider_name, sp.id as provider_id,
-        u.email as provider_email, u.first_name, u.last_name
-      FROM services s
-      LEFT JOIN service_providers sp ON s.provider_id = sp.id
-      LEFT JOIN users u ON sp.user_id = u.id
-      WHERE s.id = $1
-    `;
-
-    const result = await pool.query(serviceQuery, [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Service not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Admin service by ID error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch service',
-      error: error.message 
-    });
-  }
-});
-
-// Update service status
-router.patch('/:id/status', async (req, res) => {
-  try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        message: 'No database connection - Status update simulated'
-      });
-    }
-
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const validStatuses = ['active', 'inactive', 'pending', 'rejected'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid status. Must be one of: ' + validStatuses.join(', ')
-      });
-    }
-
-    const result = await pool.query(
-      'UPDATE services SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [status, id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Service not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: `Service status updated to ${status}`,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Admin service status update error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to update service status',
-      error: error.message 
-    });
-  }
-});
-
-// Toggle service featured status
+// Update service featured status
 router.patch('/:id/featured', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        message: 'No database connection - Featured status update simulated'
-      });
-    }
-
     const { id } = req.params;
     const { is_featured } = req.body;
-
+    
     const result = await pool.query(
-      'UPDATE services SET is_featured = $1, updated_at = NOW() WHERE id = $2 RETURNING id, title, is_featured',
+      'UPDATE services SET is_featured = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
       [is_featured, id]
     );
-
+    
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Service not found'
       });
     }
-
+    
     res.json({
       success: true,
-      message: `Service ${is_featured ? 'added to' : 'removed from'} featured`,
-      data: result.rows[0]
+      message: `Service ${is_featured ? 'added to' : 'removed from'} featured slides`,
+      service: result.rows[0]
     });
   } catch (error) {
-    console.error('Admin service featured toggle error:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('Update featured status error:', error);
+    res.status(500).json({
+      success: false,
       message: 'Failed to update featured status',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
-// Toggle service trending status
+// Update service trending status
 router.patch('/:id/trending', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        message: 'No database connection - Trending status update simulated'
-      });
-    }
-
     const { id } = req.params;
     const { is_trending } = req.body;
-
+    
     const result = await pool.query(
-      'UPDATE services SET is_trending = $1, updated_at = NOW() WHERE id = $2 RETURNING id, title, is_trending',
+      'UPDATE services SET is_trending = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
       [is_trending, id]
     );
-
+    
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Service not found'
       });
     }
-
+    
     res.json({
       success: true,
-      message: `Service ${is_trending ? 'added to' : 'removed from'} trending`,
-      data: result.rows[0]
+      message: `Service ${is_trending ? 'added to' : 'removed from'} trending services`,
+      service: result.rows[0]
     });
   } catch (error) {
-    console.error('Admin service trending toggle error:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('Update trending status error:', error);
+    res.status(500).json({
+      success: false,
       message: 'Failed to update trending status',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
-// Update service promotion settings
+// Update service promotion categories
 router.patch('/:id/promotion', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        message: 'No database connection - Promotion settings update simulated'
-      });
-    }
-
     const { id } = req.params;
     const {
       search_priority,
@@ -409,154 +305,207 @@ router.patch('/:id/promotion', async (req, res) => {
       has_maximum_visibility,
       promotion_expires_at
     } = req.body;
-
-    const result = await pool.query(`
-      UPDATE services SET 
-        search_priority = $1,
-        category_priority = $2,
-        is_enhanced_listing = $3,
-        has_increased_visibility = $4,
-        carousel_priority = $5,
-        has_maximum_visibility = $6,
-        promotion_expires_at = $7,
-        updated_at = NOW()
-      WHERE id = $8 
-      RETURNING id, title
-    `, [
-      search_priority || 0,
-      category_priority || 0,
-      is_enhanced_listing || false,
-      has_increased_visibility || false,
-      carousel_priority || 0,
-      has_maximum_visibility || false,
-      promotion_expires_at || null,
-      id
-    ]);
-
+    
+    // Build update query dynamically based on provided fields
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+    
+    if (search_priority !== undefined) {
+      updates.push(`search_priority = $${paramIndex}`);
+      values.push(search_priority);
+      paramIndex++;
+    }
+    
+    if (category_priority !== undefined) {
+      updates.push(`category_priority = $${paramIndex}`);
+      values.push(category_priority);
+      paramIndex++;
+    }
+    
+    if (is_enhanced_listing !== undefined) {
+      updates.push(`is_enhanced_listing = $${paramIndex}`);
+      values.push(is_enhanced_listing);
+      paramIndex++;
+    }
+    
+    if (has_increased_visibility !== undefined) {
+      updates.push(`has_increased_visibility = $${paramIndex}`);
+      values.push(has_increased_visibility);
+      paramIndex++;
+    }
+    
+    if (carousel_priority !== undefined) {
+      updates.push(`carousel_priority = $${paramIndex}`);
+      values.push(carousel_priority);
+      paramIndex++;
+    }
+    
+    if (has_maximum_visibility !== undefined) {
+      updates.push(`has_maximum_visibility = $${paramIndex}`);
+      values.push(has_maximum_visibility);
+      paramIndex++;
+    }
+    
+    if (promotion_expires_at !== undefined) {
+      updates.push(`promotion_expires_at = $${paramIndex}`);
+      values.push(promotion_expires_at);
+      paramIndex++;
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No promotion fields provided to update'
+      });
+    }
+    
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+    
+    const query = `UPDATE services SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+    const result = await pool.query(query, values);
+    
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Service not found'
       });
     }
-
+    
     res.json({
       success: true,
-      message: 'Promotion settings updated successfully',
-      data: result.rows[0]
+      message: 'Service promotion settings updated successfully',
+      service: result.rows[0]
     });
   } catch (error) {
-    console.error('Admin service promotion update error:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('Update promotion settings error:', error);
+    res.status(500).json({
+      success: false,
       message: 'Failed to update promotion settings',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
-// Bulk update services
-router.post('/bulk-update', async (req, res) => {
+// Update service status (approve/reject)
+router.patch('/:id/status', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        message: 'No database connection - Bulk update simulated'
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    if (!['active', 'pending', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be active, pending, or rejected'
       });
     }
+    
+    const result = await pool.query(
+      'UPDATE services SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Service status updated to ${status}`,
+      service: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update service status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update service status',
+      error: error.message
+    });
+  }
+});
 
+// Bulk update featured/trending
+router.post('/bulk-update', async (req, res) => {
+  try {
     const { service_ids, action, value } = req.body;
-
+    
     if (!service_ids || !Array.isArray(service_ids) || service_ids.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'service_ids array is required'
       });
     }
-
-    let updateQuery = '';
-    let updateParams = [];
-
-    if (action === 'featured') {
-      updateQuery = `
-        UPDATE services 
-        SET is_featured = $1, updated_at = NOW() 
-        WHERE id = ANY($2::int[])
-      `;
-      updateParams = [value, service_ids];
-    } else if (action === 'trending') {
-      updateQuery = `
-        UPDATE services 
-        SET is_trending = $1, updated_at = NOW() 
-        WHERE id = ANY($2::int[])
-      `;
-      updateParams = [value, service_ids];
-    } else if (action === 'status') {
-      updateQuery = `
-        UPDATE services 
-        SET status = $1, updated_at = NOW() 
-        WHERE id = ANY($2::int[])
-      `;
-      updateParams = [value, service_ids];
-    } else {
+    
+    if (!['featured', 'trending', 'status'].includes(action)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid action. Must be featured, trending, or status'
       });
     }
-
-    const result = await pool.query(updateQuery, updateParams);
-
+    
+    let query;
+    let params;
+    
+    if (action === 'featured') {
+      query = 'UPDATE services SET is_featured = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2) RETURNING *';
+      params = [value, service_ids];
+    } else if (action === 'trending') {
+      query = 'UPDATE services SET is_trending = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2) RETURNING *';
+      params = [value, service_ids];
+    } else if (action === 'status') {
+      query = 'UPDATE services SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($2) RETURNING *';
+      params = [value, service_ids];
+    }
+    
+    const result = await pool.query(query, params);
+    
     res.json({
       success: true,
-      message: `Bulk ${action} update completed for ${result.rowCount} services`,
-      data: { service_ids, action, value, updated_count: result.rowCount }
+      message: `${result.rows.length} services updated successfully`,
+      updated_count: result.rows.length
     });
   } catch (error) {
-    console.error('Admin service bulk update error:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('Bulk update error:', error);
+    res.status(500).json({
+      success: false,
       message: 'Failed to bulk update services',
-      error: error.message 
+      error: error.message
     });
   }
 });
 
-// Delete service
+// Delete service (admin only)
 router.delete('/:id', async (req, res) => {
   try {
-    if (!pool) {
-      return res.json({
-        success: true,
-        message: 'No database connection - Service deletion simulated'
-      });
-    }
-
     const { id } = req.params;
-
-    const result = await pool.query(
-      'DELETE FROM services WHERE id = $1 RETURNING id, title',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
+    
+    // Check if service exists
+    const checkResult = await pool.query('SELECT * FROM services WHERE id = $1', [id]);
+    
+    if (checkResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Service not found'
       });
     }
-
+    
+    // Delete service
+    await pool.query('DELETE FROM services WHERE id = $1', [id]);
+    
     res.json({
       success: true,
-      message: 'Service deleted successfully',
-      data: result.rows[0]
+      message: 'Service deleted successfully'
     });
   } catch (error) {
-    console.error('Admin service delete error:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('Delete service error:', error);
+    res.status(500).json({
+      success: false,
       message: 'Failed to delete service',
-      error: error.message 
+      error: error.message
     });
   }
 });
