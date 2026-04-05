@@ -192,11 +192,20 @@ router.get('/:id', async (req, res) => {
 router.post('/:id/follow', passport.authenticate('jwt', { session: false }), async (req, res) => {
   const client = await pool.connect();
   try {
+    // Check if database pool is available
+    if (!pool || !client) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+    
     const providerId = parseInt(req.params.id);
     const userId = req.user.id;
 
     // Validate provider ID
     if (isNaN(providerId)) {
+      client.release();
       return res.status(400).json({ success: false, message: 'Invalid provider ID' });
     }
 
@@ -270,8 +279,22 @@ router.post('/:id/follow', passport.authenticate('jwt', { session: false }), asy
 router.post('/:id/unfollow', passport.authenticate('jwt', { session: false }), async (req, res) => {
   const client = await pool.connect();
   try {
-    const providerId = req.params.id;
+    // Check if database pool is available
+    if (!pool || !client) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+    
+    const providerId = parseInt(req.params.id);
     const userId = req.user.id;
+
+    // Validate provider ID
+    if (isNaN(providerId)) {
+      client.release();
+      return res.status(400).json({ success: false, message: 'Invalid provider ID' });
+    }
 
     console.log('👤 User', userId, 'unfollowing provider', providerId);
 

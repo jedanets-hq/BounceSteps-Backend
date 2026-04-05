@@ -81,11 +81,20 @@ router.get('/', passport.authenticate('jwt', { session: false }), async (req, re
 router.post('/add', passport.authenticate('jwt', { session: false }), async (req, res) => {
   const client = await pool.connect();
   try {
+    // Check if database pool is available
+    if (!pool || !client) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+    
     const userId = req.user.id;
     const { providerId, serviceId } = req.body;
     
     // Validate that either providerId or serviceId is provided (not both, not neither)
     if ((!providerId && !serviceId) || (providerId && serviceId)) {
+      client.release();
       return res.status(400).json({ 
         success: false, 
         message: 'Either providerId or serviceId must be provided (not both)' 

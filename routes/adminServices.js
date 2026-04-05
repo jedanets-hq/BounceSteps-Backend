@@ -248,6 +248,14 @@ router.patch('/:id/featured', async (req, res) => {
     const { id } = req.params;
     const { is_featured } = req.body;
     
+    // Check if database pool is available
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
+    
     const result = await pool.query(
       'UPDATE services SET is_featured = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
       [is_featured, id]
@@ -280,6 +288,14 @@ router.patch('/:id/trending', async (req, res) => {
   try {
     const { id } = req.params;
     const { is_trending } = req.body;
+    
+    // Check if database pool is available
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
     
     const result = await pool.query(
       'UPDATE services SET is_trending = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
@@ -321,6 +337,14 @@ router.patch('/:id/promotion', async (req, res) => {
       has_maximum_visibility,
       promotion_expires_at
     } = req.body;
+    
+    // Check if database pool is available
+    if (!pool) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection not available'
+      });
+    }
     
     // Build update query dynamically based on provided fields
     const updates = [];

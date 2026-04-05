@@ -1,0 +1,42 @@
+runtime: custom
+env: flex
+
+# Automatic scaling configuration
+automatic_scaling:
+  min_num_instances: 1
+  max_num_instances: 10
+  cool_down_period_sec: 120
+  cpu_utilization:
+    target_utilization: 0.6
+
+# Resource configuration
+resources:
+  cpu: 1
+  memory_gb: 2
+  disk_size_gb: 10
+
+# Health check configuration
+liveness_check:
+  path: "/health"
+  check_interval_sec: 30
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 1
+
+readiness_check:
+  path: "/health"
+  check_interval_sec: 5
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+  app_start_timeout_sec: 300
+
+# Network configuration
+network:
+  forwarded_ports:
+    - 8080
+
+# Environment variables (set these in Google Cloud Console or via gcloud command)
+# DO NOT put sensitive data here - use Secret Manager instead
+env_variables:
+  NODE_ENV: "production"

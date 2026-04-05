@@ -4,9 +4,8 @@ const { Pool } = require('pg');
 const poolConfig = process.env.DATABASE_URL 
   ? {
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' 
-        ? { rejectUnauthorized: false } 
-        : false,
+      // For Cloud SQL Unix socket connections, SSL is not needed
+      ssl: false,
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
