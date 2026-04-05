@@ -144,6 +144,7 @@ router.get('/:id', async (req, res) => {
              s.amenities,
              s.payment_methods,
              s.contact_info,
+             s.duration_days,
              $2 as provider_user_id,
              sp.business_name,
              sp.id as provider_id,
@@ -165,14 +166,24 @@ router.get('/:id', async (req, res) => {
         title: servicesResult.rows[0].title,
         provider_user_id: servicesResult.rows[0].provider_user_id,
         provider_id: servicesResult.rows[0].provider_id,
-        business_name: servicesResult.rows[0].business_name
+        business_name: servicesResult.rows[0].business_name,
+        images: servicesResult.rows[0].images
       });
       console.log('📦 Full first service:', JSON.stringify(servicesResult.rows[0], null, 2));
     }
     
+    // Parse JSON fields for services (same as /services route)
+    const parsedServices = servicesResult.rows.map(service => ({
+      ...service,
+      images: service.images ? (typeof service.images === 'string' ? JSON.parse(service.images) : service.images) : [],
+      amenities: service.amenities ? (typeof service.amenities === 'string' ? JSON.parse(service.amenities) : service.amenities) : [],
+      payment_methods: service.payment_methods ? (typeof service.payment_methods === 'string' ? JSON.parse(service.payment_methods) : service.payment_methods) : {},
+      contact_info: service.contact_info ? (typeof service.contact_info === 'string' ? JSON.parse(service.contact_info) : service.contact_info) : {}
+    }));
+    
     // Add services to provider object
-    provider.services = servicesResult.rows;
-    provider.services_count = servicesResult.rows.length;
+    provider.services = parsedServices;
+    provider.services_count = parsedServices.length;
     
     // Add cache-control headers to prevent stale data
     res.set({

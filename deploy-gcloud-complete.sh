@@ -11,7 +11,7 @@ echo "========================================"
 echo ""
 
 # Configuration
-PROJECT_ID="${GCLOUD_PROJECT_ID}"
+PROJECT_ID="project-df58b635-5420-42bc-809"
 SERVICE_NAME="bouncesteps-backend"
 REGION="${GCLOUD_REGION:-us-central1}"
 
@@ -31,11 +31,8 @@ fi
 
 # Get project ID if not set
 if [ -z "$PROJECT_ID" ]; then
-    echo -e "${YELLOW}📋 Available Projects:${NC}"
-    gcloud projects list
-    echo ""
-    read -p "Weka Project ID yako: " PROJECT_ID
-    export GCLOUD_PROJECT_ID=$PROJECT_ID
+    echo -e "${YELLOW}⚠️  Project ID not set, using default${NC}"
+    PROJECT_ID="project-df58b635-5420-42bc-809"
 fi
 
 echo -e "${BLUE}📋 Configuration:${NC}"
@@ -93,7 +90,7 @@ gcloud run deploy $SERVICE_NAME \
     --max-instances 10 \
     --timeout 300 \
     --set-env-vars "NODE_ENV=production,PORT=8080,DATABASE_URL=${DATABASE_URL},JWT_SECRET=${JWT_SECRET},SESSION_SECRET=${SESSION_SECRET},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET},GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL},FRONTEND_URL=${FRONTEND_URL},CORS_ORIGINS=${CORS_ORIGINS}" \
-    --add-cloudsql-instances "bouncesteps-project:us-central1:bouncesteps-db"
+    --add-cloudsql-instances "project-df58b635-5420-42bc-809:us-central1:bouncesteps-db"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Deployment failed!${NC}"

@@ -6,6 +6,7 @@ node_modules/
 .env.local
 .env.production
 env-vars.yaml
+env-vars-deploy.yaml
 env.yaml
 
 # Logs
