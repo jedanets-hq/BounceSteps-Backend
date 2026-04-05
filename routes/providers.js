@@ -144,7 +144,6 @@ router.get('/:id', async (req, res) => {
              s.amenities,
              s.payment_methods,
              s.contact_info,
-             s.duration_days,
              $2 as provider_user_id,
              sp.business_name,
              sp.id as provider_id,
