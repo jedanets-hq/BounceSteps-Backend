@@ -64,14 +64,8 @@ router.get('/destinations/popular', async (req, res) => {
         description = `${row.service_count} service available`;
       }
       
-      if (row.booking_count > 0) {
-        description += ` • ${row.booking_count} bookings`;
-      }
-      
-      if (row.categories) {
-        const categoryList = row.categories.split(', ').slice(0, 2).join(', ');
-        description += ` • ${categoryList}`;
-      }
+      // Remove bookings and categories from description
+      // Only show service count
       
       return {
         name: row.name,
@@ -534,17 +528,60 @@ router.post('/', authenticateJWT, async (req, res) => {
     }
     
     // GET PROVIDER PROFILE - Get service_providers.id AND location
-    const providerResult = await pool.query(`
+    let providerResult = await pool.query(`
       SELECT id, region, district, area, ward, country, location, service_location
       FROM service_providers
       WHERE user_id = $1
     `, [req.user.id]);
     
+    // AUTO-CREATE provider profile if it doesn't exist
     if (providerResult.rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Provider profile not found. Please complete your profile first.'
-      });
+      console.log('⚠️  Provider profile not found for user:', req.user.id);
+      console.log('🔧 Auto-creating provider profile...');
+      
+      // Get user details
+      const userResult = await pool.query(`
+        SELECT first_name, last_name, email FROM users WHERE id = $1
+      `, [req.user.id]);
+      
+      if (userResult.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
+      const user = userResult.rows[0];
+      const businessName = `${user.first_name} ${user.last_name}`.trim() || 'My Business';
+      
+      // Create provider profile
+      const createResult = await pool.query(`
+        INSERT INTO service_providers (
+          user_id,
+          business_name,
+          business_type,
+          location,
+          service_location,
+          country,
+          is_verified,
+          rating,
+          total_bookings
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, region, district, area, ward, country, location, service_location
+      `, [
+        req.user.id,
+        businessName,
+        'Service Provider',
+        'Tanzania',
+        'Tanzania',
+        'Tanzania',
+        false,
+        0.0,
+        0
+      ]);
+      
+      providerResult = createResult;
+      console.log('✅ Provider profile created with ID:', createResult.rows[0].id);
     }
     
     const provider = providerResult.rows[0];
