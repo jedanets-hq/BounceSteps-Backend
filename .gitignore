@@ -5,6 +5,8 @@ node_modules/
 .env
 .env.local
 .env.production
+.env.deploy
+.env.deploy.yaml
 env-vars.yaml
 env-vars-deploy.yaml
 env.yaml

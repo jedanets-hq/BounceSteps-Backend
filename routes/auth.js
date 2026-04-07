@@ -17,7 +17,7 @@ const generateToken = (user) => {
       userType: user.user_type
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '100y' } // Practically forever (100 years)
   );
 };
 
