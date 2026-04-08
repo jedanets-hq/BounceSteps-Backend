@@ -56,12 +56,14 @@ router.get('/destinations/popular', async (req, res) => {
       // Use first available image or fallback
       const primaryImage = images.length > 0 ? images[0] : '/default-destination.jpg';
       
-      // Create description based on available data
+      // Create description based on location data instead of service count
       let description = '';
-      if (row.service_count > 1) {
-        description = `${row.service_count} services available`;
+      if (row.district && row.area) {
+        description = `${row.district}, ${row.area}`;
+      } else if (row.district) {
+        description = `Located in ${row.district}`;
       } else {
-        description = `${row.service_count} service available`;
+        description = `Popular destination with ${row.categories || 'various services'}`;
       }
       
       // Remove bookings and categories from description
