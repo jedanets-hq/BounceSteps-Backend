@@ -6,6 +6,7 @@ const { body, validationResult } = require('express-validator');
 const { getValidationMiddleware } = require('../middleware/validation');
 const { handleDuplicateKeyError } = require('../middleware/duplicateHandler');
 const { User, ServiceProvider } = require('../models');
+const emailService = require('../services/emailService');
 const router = express.Router();
 
 // Generate JWT token
@@ -705,26 +706,148 @@ router.post('/forgot-password', async (req, res) => {
 
     // Always return success for security (don't reveal if email exists)
     if (user) {
-      // Generate reset token
+      // Check if user has a password (not Google-only user)
+      if (!user.password && user.auth_provider === 'google') {
+        return res.status(400).json({
+          success: false,
+          message: 'This account was created with Google. Please use "Sign in with Google" instead.'
+        });
+      }
+
+      // Generate reset token (6-digit code)
+      const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Create JWT token with reset code
       const resetToken = jwt.sign(
-        { id: user.id, email: user.email, type: 'password_reset' },
+        { 
+          id: user.id, 
+          email: user.email, 
+          resetCode: resetCode,
+          type: 'password_reset' 
+        },
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
       );
 
-      console.log(`Password reset requested for: ${email}`);
-      // TODO: Implement email sending
+      // Store reset token in database (you might want to add a reset_token field to users table)
+      // For now, we'll use the JWT token approach
+
+      // Create reset URL
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}&code=${resetCode}`;
+
+      try {
+        // Send email
+        await emailService.sendPasswordResetEmail(user.email, resetCode, resetUrl);
+        console.log(`✅ Password reset email sent to: ${email}`);
+      } catch (emailError) {
+        console.error('❌ Failed to send password reset email:', emailError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send password reset email. Please try again later.'
+        });
+      }
+    } else {
+      console.log(`❌ Password reset requested for non-existent email: ${email}`);
     }
 
+    // Always return success for security (don't reveal if email exists)
     res.json({
       success: true,
-      message: 'If an account with that email exists, a password reset link has been sent.'
+      message: 'If an account with that email exists, a password reset link has been sent to your email.'
     });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('❌ Forgot password error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to process password reset request'
+      message: 'Failed to process password reset request. Please try again later.'
+    });
+  }
+});
+
+// Reset Password - Verify token and reset password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, code, newPassword } = req.body;
+
+    if (!token || !code || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token, code, and new password are required'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    try {
+      // Verify JWT token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      
+      if (decoded.type !== 'password_reset') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid reset token'
+        });
+      }
+
+      // Verify reset code matches
+      if (decoded.resetCode !== code) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid reset code'
+        });
+      }
+
+      // Find user
+      const user = await User.findById(decoded.id);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+      // Update user password
+      await User.update(user.id, { 
+        password: hashedPassword,
+        // Update auth_provider if it was Google-only
+        auth_provider: user.auth_provider === 'google' ? 'both' : user.auth_provider || 'email'
+      });
+
+      console.log(`✅ Password reset successful for: ${user.email}`);
+
+      res.json({
+        success: true,
+        message: 'Password has been reset successfully. You can now login with your new password.'
+      });
+
+    } catch (jwtError) {
+      if (jwtError.name === 'TokenExpiredError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Reset token has expired. Please request a new password reset.'
+        });
+      }
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password. Please try again later.'
     });
   }
 });
