@@ -380,17 +380,6 @@ class EmailService {
                 align-items: center;
                 gap: 10px;
             }
-            .logo-icon {
-                width: 32px;
-                height: 32px;
-                background: #10b981;
-                border-radius: 6px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 16px;
-                color: white;
-            }
             .logo-text {
                 font-size: 24px;
                 font-weight: 700;
@@ -478,7 +467,6 @@ class EmailService {
             <!-- Header with Logo -->
             <div class="header">
                 <div class="logo-container">
-                    <div class="logo-icon">🏖️</div>
                     <div class="logo-text">BounceSteps</div>
                 </div>
             </div>
