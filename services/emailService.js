@@ -20,7 +20,7 @@ class EmailService {
     const mailOptions = {
       from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM}>`,
       to: email,
-      subject: '🔐 Reset Your BounceSteps Password',
+      subject: 'Reset Your BounceSteps Password',
       html: this.getPasswordResetTemplate(resetToken, resetUrl)
     };
 
@@ -358,216 +358,106 @@ class EmailService {
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
                 line-height: 1.6;
-                color: #1f2937;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #333333;
+                background-color: #f5f5f5;
                 padding: 20px;
-                min-height: 100vh;
             }
             .email-wrapper {
                 max-width: 600px;
                 margin: 0 auto;
                 background: #ffffff;
-                border-radius: 16px;
+                border-radius: 8px;
                 overflow: hidden;
-                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             }
             .header {
-                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-                padding: 40px 30px;
-                text-align: center;
-                color: white;
+                background-color: #ffffff;
+                padding: 30px 40px 20px 40px;
+                border-bottom: 1px solid #e5e5e5;
             }
             .logo-container {
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                gap: 12px;
-                margin-bottom: 16px;
-            }
-            .logo-icon {
-                width: 48px;
-                height: 48px;
-                background: rgba(255, 255, 255, 0.2);
-                border-radius: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 24px;
+                gap: 10px;
             }
             .logo-text {
-                font-size: 32px;
-                font-weight: 800;
-                letter-spacing: -0.5px;
-            }
-            .tagline {
-                font-size: 16px;
-                opacity: 0.9;
-                font-weight: 400;
-            }
-            .content {
-                padding: 40px 30px;
-            }
-            .greeting {
                 font-size: 24px;
                 font-weight: 700;
-                color: #1f2937;
-                margin-bottom: 24px;
-                text-align: center;
+                color: #333333;
+            }
+            .content {
+                padding: 40px;
+            }
+            .greeting {
+                font-size: 18px;
+                font-weight: 400;
+                color: #333333;
+                margin-bottom: 20px;
             }
             .message {
                 font-size: 16px;
-                color: #4b5563;
-                margin-bottom: 32px;
-                text-align: center;
-                line-height: 1.7;
+                color: #333333;
+                margin-bottom: 30px;
+                line-height: 1.5;
             }
-            .reset-button-container {
-                text-align: center;
-                margin: 40px 0;
-            }
-            .reset-button {
-                display: inline-block;
-                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-                color: white;
-                padding: 16px 32px;
-                text-decoration: none;
-                border-radius: 12px;
-                font-weight: 600;
-                font-size: 16px;
-                box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
-                transition: all 0.3s ease;
-            }
-            .reset-button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px 0 rgba(37, 99, 235, 0.5);
-            }
-            .code-section {
-                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-                border: 2px solid #e2e8f0;
-                border-radius: 12px;
-                padding: 24px;
-                margin: 32px 0;
+            .reset-code-section {
+                background-color: #f8f8f8;
+                border: 1px solid #e5e5e5;
+                border-radius: 4px;
+                padding: 20px;
+                margin: 30px 0;
                 text-align: center;
             }
             .code-label {
                 font-size: 14px;
-                color: #64748b;
-                margin-bottom: 8px;
-                font-weight: 500;
+                color: #666666;
+                margin-bottom: 10px;
             }
             .reset-code {
-                font-size: 32px;
-                font-weight: 800;
-                color: #2563eb;
+                font-size: 24px;
+                font-weight: 700;
+                color: #333333;
                 font-family: 'Courier New', monospace;
-                letter-spacing: 4px;
-                margin-bottom: 8px;
+                letter-spacing: 2px;
+                margin-bottom: 10px;
             }
-            .code-note {
-                font-size: 12px;
-                color: #64748b;
-            }
-            .security-notice {
-                background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-                border: 1px solid #f59e0b;
-                border-radius: 12px;
-                padding: 20px;
-                margin: 32px 0;
-            }
-            .security-title {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-weight: 600;
-                color: #92400e;
-                margin-bottom: 12px;
-                font-size: 16px;
-            }
-            .security-list {
-                list-style: none;
-                color: #92400e;
-                font-size: 14px;
-            }
-            .security-list li {
-                margin-bottom: 6px;
-                padding-left: 16px;
-                position: relative;
-            }
-            .security-list li:before {
-                content: "•";
-                position: absolute;
-                left: 0;
-                color: #f59e0b;
-                font-weight: bold;
-            }
-            .alternative-link {
-                background: #f8fafc;
-                border-radius: 8px;
-                padding: 16px;
-                margin: 24px 0;
-                border-left: 4px solid #2563eb;
-            }
-            .alternative-link p {
-                font-size: 14px;
-                color: #4b5563;
-                margin-bottom: 8px;
-            }
-            .link-text {
-                word-break: break-all;
-                color: #2563eb;
-                font-size: 12px;
-                background: #eff6ff;
-                padding: 8px;
+            .reset-button {
+                display: inline-block;
+                background-color: #0073b1;
+                color: white;
+                padding: 12px 24px;
+                text-decoration: none;
                 border-radius: 4px;
-                font-family: monospace;
+                font-weight: 500;
+                font-size: 16px;
+                margin: 20px 0;
+            }
+            .security-info {
+                font-size: 14px;
+                color: #666666;
+                margin: 30px 0;
+                line-height: 1.5;
             }
             .footer {
-                background: #f8fafc;
-                padding: 32px 30px;
-                text-align: center;
-                border-top: 1px solid #e5e7eb;
-            }
-            .footer-brand {
-                font-weight: 600;
-                color: #1f2937;
-                margin-bottom: 8px;
+                background-color: #f8f8f8;
+                padding: 30px 40px;
+                border-top: 1px solid #e5e5e5;
+                font-size: 12px;
+                color: #666666;
+                text-align: left;
             }
             .footer-text {
-                color: #6b7280;
-                font-size: 14px;
-                margin-bottom: 16px;
-            }
-            .footer-copyright {
-                color: #9ca3af;
-                font-size: 12px;
-            }
-            .divider {
-                height: 1px;
-                background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
-                margin: 32px 0;
+                margin-bottom: 5px;
             }
             @media (max-width: 600px) {
-                body {
-                    padding: 10px;
-                }
-                .header {
-                    padding: 30px 20px;
-                }
-                .content {
-                    padding: 30px 20px;
-                }
-                .footer {
-                    padding: 24px 20px;
+                .content, .header, .footer {
+                    padding: 20px;
                 }
                 .logo-text {
-                    font-size: 28px;
-                }
-                .greeting {
                     font-size: 20px;
                 }
                 .reset-code {
-                    font-size: 24px;
-                    letter-spacing: 2px;
+                    font-size: 20px;
                 }
             }
         </style>
@@ -577,80 +467,59 @@ class EmailService {
             <!-- Header with Logo -->
             <div class="header">
                 <div class="logo-container">
-                    <div class="logo-icon">🏖️</div>
                     <div class="logo-text">BounceSteps</div>
                 </div>
-                <div class="tagline">Your gateway to extraordinary journeys</div>
             </div>
             
             <!-- Main Content -->
             <div class="content">
-                <div class="greeting">Reset Your Password</div>
+                <div class="greeting">Hello,</div>
                 
                 <div class="message">
-                    We received a request to reset your password for your BounceSteps account. 
-                    If you made this request, use the button below or the reset code to create a new password.
+                    Your password reset code was requested.
                 </div>
                 
-                <!-- Reset Button -->
-                <div class="reset-button-container">
-                    <a href="${resetUrl}" class="reset-button">
-                        🔐 Reset My Password
-                    </a>
+                <div class="message">
+                    <strong>When and where it happened:</strong><br>
+                    Date: ${new Date().toLocaleString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        timeZoneName: 'short'
+                    })}
                 </div>
                 
                 <!-- Reset Code Section -->
-                <div class="code-section">
-                    <div class="code-label">Your Reset Code</div>
+                <div class="reset-code-section">
+                    <div class="code-label">Your reset code:</div>
                     <div class="reset-code">${resetToken}</div>
-                    <div class="code-note">Enter this code on the reset password page</div>
-                </div>
-                
-                <!-- Security Notice -->
-                <div class="security-notice">
-                    <div class="security-title">
-                        <span>🛡️</span>
-                        <span>Security Notice</span>
-                    </div>
-                    <ul class="security-list">
-                        <li>This reset link expires in 1 hour for your security</li>
-                        <li>If you didn't request this reset, please ignore this email</li>
-                        <li>Never share your reset code with anyone</li>
-                        <li>BounceSteps will never ask for your password via email</li>
-                    </ul>
-                </div>
-                
-                <div class="divider"></div>
-                
-                <!-- Alternative Link -->
-                <div class="alternative-link">
-                    <p><strong>Button not working?</strong> Copy and paste this link into your browser:</p>
-                    <div class="link-text">${resetUrl}</div>
                 </div>
                 
                 <div class="message">
-                    If you didn't request a password reset, you can safely ignore this email. 
-                    Your password will remain unchanged.
+                    If you didn't take this action, let us know it wasn't you by using this link. For your security, we'll require that you reset your BounceSteps password.
                 </div>
                 
-                <div style="text-align: center; margin-top: 32px;">
-                    <p style="color: #4b5563; margin-bottom: 8px;">Best regards,</p>
-                    <p style="font-weight: 600; color: #1f2937;">The BounceSteps Team</p>
+                <div style="text-align: center;">
+                    <a href="${resetUrl}" class="reset-button">Reset Password</a>
+                </div>
+                
+                <div class="security-info">
+                    To further secure your account, you can also:<br>
+                    • Change your password regularly<br>
+                    • Use a strong, unique password<br>
+                    • Enable two-factor authentication if available
                 </div>
             </div>
             
             <!-- Footer -->
             <div class="footer">
-                <div class="footer-brand">BounceSteps - iSafari Global</div>
-                <div class="footer-text">
-                    Making travel dreams come true across Tanzania and beyond
-                </div>
-                <div class="footer-text">
-                    Need help? Contact our support team anytime
-                </div>
-                <div class="footer-copyright">
-                    © 2024 BounceSteps. All rights reserved. | Powered by JEDA NETWORKS
-                </div>
+                <div class="footer-text">This email was intended for your BounceSteps account.</div>
+                <div class="footer-text">You are receiving BounceSteps notification emails.</div>
+                <div class="footer-text">Help</div>
+                <div class="footer-text">BounceSteps</div>
+                <div class="footer-text">© 2024 BounceSteps Corporation. All rights reserved.</div>
             </div>
         </div>
     </body>
