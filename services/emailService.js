@@ -332,7 +332,7 @@ class EmailService {
                     Questions? Reply to this email or contact our support team
                 </div>
                 <div class="footer-copyright">
-                    © 2024 BounceSteps. All rights reserved. | Powered by JEDA NETWORKS
+                    © 2026 BounceSteps. All rights reserved. | Powered by JEDA NETWORKS
                 </div>
             </div>
         </div>
@@ -379,6 +379,17 @@ class EmailService {
                 display: flex;
                 align-items: center;
                 gap: 10px;
+            }
+            .logo-icon {
+                width: 32px;
+                height: 32px;
+                background: #10b981;
+                border-radius: 6px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 16px;
+                color: white;
             }
             .logo-text {
                 font-size: 24px;
@@ -467,6 +478,7 @@ class EmailService {
             <!-- Header with Logo -->
             <div class="header">
                 <div class="logo-container">
+                    <div class="logo-icon">🏖️</div>
                     <div class="logo-text">BounceSteps</div>
                 </div>
             </div>
@@ -519,7 +531,7 @@ class EmailService {
                 <div class="footer-text">You are receiving BounceSteps notification emails.</div>
                 <div class="footer-text">Help</div>
                 <div class="footer-text">BounceSteps</div>
-                <div class="footer-text">© 2024 BounceSteps Corporation. All rights reserved.</div>
+                <div class="footer-text">© 2026 BounceSteps Corporation. All rights reserved.</div>
             </div>
         </div>
     </body>
