@@ -46,6 +46,8 @@ router.get('/profile', passport.authenticate('jwt', { session: false }), async (
         user.isVerified = provider.is_verified;
         user.rating = provider.rating;
         user.totalBookings = provider.total_bookings;
+        user.paymentMethods = provider.payment_methods;
+        user.contactInfo = provider.contact_info;
         
         // Also keep the nested provider object for backward compatibility
         user.provider = provider;
@@ -53,7 +55,9 @@ router.get('/profile', passport.authenticate('jwt', { session: false }), async (
         console.log('✅ Provider profile included and flattened:', {
           business_name: provider.business_name,
           service_location: provider.service_location,
-          service_categories: provider.service_categories
+          service_categories: provider.service_categories,
+          payment_methods: provider.payment_methods,
+          contact_info: provider.contact_info
         });
       }
     }
@@ -117,11 +121,13 @@ router.put('/business-profile', passport.authenticate('jwt', { session: false })
     const { 
       business_name, 
       business_type, 
-      description 
+      description,
+      payment_methods,
+      contact_info
     } = req.body;
     
     console.log('📝 Updating business profile for user:', userId);
-    console.log('📦 Business data:', { business_name, business_type, description });
+    console.log('📦 Business data:', { business_name, business_type, description, payment_methods, contact_info });
     console.log('⚠️ NOTE: service_location and service_categories are FIXED and cannot be updated');
     
     // Check if provider profile exists
@@ -136,24 +142,30 @@ router.put('/business-profile', passport.authenticate('jwt', { session: false })
         message: 'Provider profile not found. Please contact support.'
       });
     } else {
-      // Update existing provider profile - ONLY business_name, business_type, and description
+      // Update existing provider profile - business_name, business_type, description, payment_methods, contact_info
       // service_location and service_categories are FIXED from registration
       const result = await pool.query(`
         UPDATE service_providers
         SET business_name = COALESCE($1, business_name),
             business_type = COALESCE($2, business_type),
             description = COALESCE($3, description),
+            payment_methods = COALESCE($4, payment_methods),
+            contact_info = COALESCE($5, contact_info),
             updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = $4
+        WHERE user_id = $6
         RETURNING *
       `, [
         business_name, 
         business_type, 
-        description, 
+        description,
+        payment_methods ? JSON.stringify(payment_methods) : null,
+        contact_info ? JSON.stringify(contact_info) : null,
         userId
       ]);
       
       console.log('✅ Business profile updated (location and categories remain fixed)');
+      console.log('💳 Payment methods saved:', result.rows[0].payment_methods);
+      console.log('📞 Contact info saved:', result.rows[0].contact_info);
       return res.json({ success: true, provider: result.rows[0] });
     }
   } catch (error) {
