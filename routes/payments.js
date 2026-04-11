@@ -55,9 +55,9 @@ router.post('/pesapal/initiate', authenticateJWT, async (req, res) => {
           user_id,
           service_id,
           provider_id,
-          start_date,
-          end_date,
-          guests,
+          booking_date,
+          travel_date,
+          participants,
           total_price,
           status,
           created_at
@@ -67,9 +67,9 @@ router.post('/pesapal/initiate', authenticateJWT, async (req, res) => {
         userId,
         item.serviceId,
         item.providerId,
-        item.startDate || new Date(),
-        item.endDate || new Date(),
-        item.guests || 1,
+        new Date(), // booking_date - when booking was made
+        item.startDate || item.travelDate || new Date(), // travel_date - when service will be used
+        item.guests || item.participants || 1,
         item.price,
         'pending',
       ]);
