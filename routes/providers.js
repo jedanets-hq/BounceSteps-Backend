@@ -147,10 +147,19 @@ router.get('/:id', async (req, res) => {
              $2 as provider_user_id,
              sp.business_name,
              sp.id as provider_id,
-             COUNT(DISTINCT b.id) as review_count,
-             AVG(b.rating) as average_rating
+             COALESCE(
+               (SELECT COUNT(*) 
+                FROM reviews 
+                WHERE service_id = s.id AND status = 'approved'),
+               0
+             ) as review_count,
+             COALESCE(
+               (SELECT AVG(rating)::numeric(3,2) 
+                FROM reviews 
+                WHERE service_id = s.id AND status = 'approved'),
+               0
+             ) as average_rating
       FROM services s
-      LEFT JOIN bookings b ON s.id = b.service_id
       LEFT JOIN service_providers sp ON s.provider_id = sp.id
       WHERE s.provider_id = $1 AND s.is_active = true
       GROUP BY s.id, sp.id, sp.business_name

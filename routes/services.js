@@ -18,7 +18,17 @@ router.get('/destinations/popular', async (req, res) => {
         COUNT(DISTINCT b.id) as booking_count,
         AVG(s.price) as avg_price,
         STRING_AGG(DISTINCT s.category, ', ') as categories,
-        ARRAY_AGG(DISTINCT s.images) FILTER (WHERE s.images IS NOT NULL AND s.images != '[]') as all_images
+        ARRAY_AGG(DISTINCT s.images) FILTER (WHERE s.images IS NOT NULL AND s.images != '[]') as all_images,
+        COALESCE(
+          (SELECT AVG(r.rating)::numeric(3,2)
+           FROM reviews r
+           INNER JOIN services s2 ON r.service_id = s2.id
+           WHERE s2.region = s.region 
+             AND s2.district = s.district 
+             AND s2.area = s.area
+             AND r.status = 'approved'),
+          0
+        ) as average_rating
       FROM services s
       LEFT JOIN bookings b ON s.id = b.service_id
       WHERE s.status = 'active' 
@@ -78,7 +88,8 @@ router.get('/destinations/popular', async (req, res) => {
         service_count: parseInt(row.service_count),
         booking_count: parseInt(row.booking_count),
         avg_price: row.avg_price ? parseFloat(row.avg_price) : null,
-        categories: row.categories
+        categories: row.categories,
+        average_rating: row.average_rating ? parseFloat(row.average_rating) : 0
       };
     });
     
