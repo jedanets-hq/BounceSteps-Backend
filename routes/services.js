@@ -25,8 +25,7 @@ router.get('/destinations/popular', async (req, res) => {
            INNER JOIN services s2 ON r.service_id = s2.id
            WHERE s2.region = s.region 
              AND s2.district = s.district 
-             AND s2.area = s.area
-             AND r.status = 'approved'),
+             AND s2.area = s.area),
           0
         ) as average_rating
       FROM services s

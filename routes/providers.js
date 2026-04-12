@@ -150,13 +150,13 @@ router.get('/:id', async (req, res) => {
              COALESCE(
                (SELECT COUNT(*) 
                 FROM reviews 
-                WHERE service_id = s.id AND status = 'approved'),
+                WHERE service_id = s.id),
                0
              ) as review_count,
              COALESCE(
                (SELECT AVG(rating)::numeric(3,2) 
                 FROM reviews 
-                WHERE service_id = s.id AND status = 'approved'),
+                WHERE service_id = s.id),
                0
              ) as average_rating
       FROM services s
