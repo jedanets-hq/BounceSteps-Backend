@@ -660,4 +660,181 @@ router.get('/public/trust-stats', async (req, res) => {
   }
 });
 
+// Simple reviews table creation (no dependencies)
+router.post('/create-simple-reviews-table', async (req, res) => {
+  try {
+    console.log('🔧 Creating simple reviews table...');
+    
+    const { pool } = require('../config/postgresql');
+    const client = await pool.connect();
+    
+    try {
+      // Drop table if exists to start fresh
+      console.log('Dropping existing reviews table if exists...');
+      await client.query(`DROP TABLE IF EXISTS reviews CASCADE`);
+      
+      // Create simple reviews table
+      console.log('Creating new reviews table...');
+      await client.query(`
+        CREATE TABLE reviews (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          service_id INTEGER,
+          provider_id INTEGER,
+          rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+          comment TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Create basic indexes
+      console.log('Creating indexes...');
+      await client.query(`CREATE INDEX idx_reviews_service_id ON reviews(service_id)`);
+      await client.query(`CREATE INDEX idx_reviews_user_id ON reviews(user_id)`);
+      await client.query(`CREATE INDEX idx_reviews_created_at ON reviews(created_at DESC)`);
+      
+      // Verify table was created
+      const tableCheck = await client.query(`
+        SELECT COUNT(*) as count FROM information_schema.tables 
+        WHERE table_name = 'reviews'
+      `);
+      
+      const columnCheck = await client.query(`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'reviews' 
+        ORDER BY ordinal_position
+      `);
+      
+      console.log('✅ Reviews table created successfully');
+      console.log('Table exists:', tableCheck.rows[0].count > 0);
+      console.log('Columns:', columnCheck.rows);
+      
+      res.json({
+        success: true,
+        message: 'Simple reviews table created successfully',
+        tableExists: tableCheck.rows[0].count > 0,
+        columns: columnCheck.rows,
+        timestamp: new Date().toISOString()
+      });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error creating simple reviews table:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create simple reviews table',
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Create reviews table endpoint (admin only)
+router.post('/create-reviews-table', async (req, res) => {
+  try {
+    console.log('🔧 Admin request to create reviews table...');
+    
+    const client = await pool.connect();
+    
+    try {
+      // First, create reviews table without foreign key constraints
+      console.log('Creating reviews table without constraints...');
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS reviews (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          service_id INTEGER,
+          provider_id INTEGER,
+          rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+          comment TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      
+      // Create indexes
+      console.log('Creating indexes...');
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_reviews_service_id ON reviews(service_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_reviews_provider_id ON reviews(provider_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC)`);
+      
+      // Add constraint to ensure either service_id or provider_id is provided
+      console.log('Adding constraints...');
+      await client.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints 
+                         WHERE constraint_name='check_service_or_provider' AND table_name='reviews') THEN
+            ALTER TABLE reviews 
+            ADD CONSTRAINT check_service_or_provider 
+            CHECK (service_id IS NOT NULL OR provider_id IS NOT NULL);
+          END IF;
+        END $$;
+      `);
+      
+      // Check table structure
+      const tableInfo = await client.query(`
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'reviews'
+        ORDER BY ordinal_position;
+      `);
+      
+      console.log('✅ Reviews table created successfully');
+      console.log('Table structure:', tableInfo.rows);
+      
+      res.json({
+        success: true,
+        message: 'Reviews table created successfully',
+        structure: tableInfo.rows,
+        timestamp: new Date().toISOString()
+      });
+      
+    } finally {
+      client.release();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error creating reviews table:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create reviews table',
+      error: error.message
+    });
+  }
+});
+
+// Run startup migrations endpoint (admin only)
+router.post('/run-migrations', async (req, res) => {
+  try {
+    console.log('🔧 Admin request to run migrations...');
+    
+    const { runStartupMigrations } = require('../migrations/run-on-startup');
+    
+    await runStartupMigrations();
+    
+    console.log('✅ Migrations completed successfully');
+    
+    res.json({
+      success: true,
+      message: 'Migrations completed successfully',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error running migrations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to run migrations',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

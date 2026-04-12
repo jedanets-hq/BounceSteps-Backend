@@ -211,6 +211,51 @@ async function runStartupMigrations() {
     
     console.log('✅ Foreign key constraint fixed - now points to service_providers table');
     
+    // 5. Create reviews table if not exists
+    console.log('🔧 Creating reviews table...');
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reviews (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
+        provider_id INTEGER REFERENCES service_providers(id) ON DELETE CASCADE,
+        rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        comment TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create indexes for better performance
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_reviews_service_id ON reviews(service_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_reviews_provider_id ON reviews(provider_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC)
+    `);
+    
+    // Add constraint to ensure either service_id or provider_id is provided
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints 
+                       WHERE constraint_name='check_service_or_provider' AND table_name='reviews') THEN
+          ALTER TABLE reviews 
+          ADD CONSTRAINT check_service_or_provider 
+          CHECK (service_id IS NOT NULL OR provider_id IS NOT NULL);
+        END IF;
+      END $$;
+    `);
+    
+    console.log('✅ reviews table ready');
+    
     console.log('✅ All startup migrations completed successfully');
   } catch (error) {
     console.error('❌ Startup migration error:', error);

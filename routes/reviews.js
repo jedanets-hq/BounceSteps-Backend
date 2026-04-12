@@ -12,10 +12,12 @@ router.get('/provider/:providerId', async (req, res) => {
       SELECT 
         r.id,
         r.rating,
-        r.comment,
+        r.comment as review_text,
         r.created_at,
-        u.name as user_name,
-        u.email as user_email
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.avatar_url
       FROM reviews r
       LEFT JOIN users u ON r.user_id = u.id
       WHERE r.provider_id = $1
@@ -44,10 +46,12 @@ router.get('/service/:serviceId', async (req, res) => {
       SELECT 
         r.id,
         r.rating,
-        r.comment,
+        r.comment as review_text,
         r.created_at,
-        u.name as user_name,
-        u.email as user_email
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.avatar_url
       FROM reviews r
       LEFT JOIN users u ON r.user_id = u.id
       WHERE r.service_id = $1
